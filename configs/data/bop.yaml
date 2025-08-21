@@ -1,4 +1,4 @@
-root_dir: ${machine.root_dir}/datasets/
+root_dir: /mnt/personal/jelint19/data/bop/
 source_url: https://bop.felk.cvut.cz/media/data/bop_datasets/
 unzip_mode: unzip
 
@@ -19,7 +19,7 @@ reference_dataloader:
 
 query_dataloader:
   _target_: src.dataloader.bop.BaseBOPTest
-  root_dir: ${machine.root_dir}/datasets/
+  root_dir: /mnt/personal/jelint19/data/bop/
   split:
   reset_metaData: True
   processing_config:

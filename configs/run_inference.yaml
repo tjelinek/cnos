@@ -6,6 +6,6 @@ defaults:
   - model: cnos
   - _self_
 
-save_dir: ${machine.root_dir}/results/${name_exp}
+save_dir: /mnt/personal/jelint19/results/cnos/${name_exp}
 name_exp: cnos_exps
 dataset_name:

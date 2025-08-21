@@ -47,7 +47,6 @@ if __name__ == "__main__":
     with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
         cfg = compose(config_name="run_inference")
 
-
     base_path = Path('/mnt/personal/jelint19/data/')
     folder_paths = []
 

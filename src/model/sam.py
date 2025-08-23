@@ -141,7 +141,8 @@ class CustomSamAutomaticMaskGenerator(SamAutomaticMaskGenerator):
             )
             data.filter(keep_by_nms)
 
-        data["masks"] = torch.stack(data["masks"]).to(data["boxes"].device)
+        data["masks"] = [torch.from_numpy(rle_to_mask(rle)) for rle in data["rles"]]
+        data["masks"] = torch.stack(data["masks"])
         return data
 
     def remove_small_detections(self, mask_data: MaskData, img_size: List) -> MaskData:

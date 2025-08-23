@@ -1,5 +1,5 @@
 _target_: src.model.fast_sam.FastSAM
-checkpoint_path: ${machine.root_dir}/pretrained/FastSAM/FastSAM-x.pt
+checkpoint_path: /mnt/personal/jelint19/weights/FastSAM/FastSAM-x.pt
 segmentor_width_size: ${model.segmentor_width_size}
 config:
   iou_threshold: 0.9

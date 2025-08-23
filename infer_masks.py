@@ -1,3 +1,4 @@
+import argparse
 import pickle
 import sys
 from pathlib import Path
@@ -69,31 +70,39 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig):
 
 
 if __name__ == "__main__":
-    model = 'cnos_fast'  # either 'cnos' or 'cnos_fast'
+    model = 'cnos_fast'
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dataset",
+        choices=["lmo", "tless", "tudl", "icbin", "itodd", "hb_kinect", "hb_primesense", "ycbv", "handal"],
+        help="Dataset shortcut to run on. If not provided, runs on all datasets."
+    )
+    args = parser.parse_args()
 
     sys.path.append('/repositories/cnos')
     cfg_dir = (Path(__file__).parent / "configs").resolve()
     with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
-        cfg = compose(
-            config_name="run_inference",
-            overrides=[
-                f"model={model}",
-            ],
-        )
+        cfg = compose(config_name="run_inference", overrides=[f"model={model}"])
 
     base_path = Path('/mnt/personal/jelint19/data/')
     bop_path = base_path / 'bop'
-    folder_paths = [
-        bop_path / 'lmo' / 'test',
-        bop_path / 'tless' / 'test_primesense',
-        bop_path / 'tudl' / 'test',
-        bop_path / 'icbin' / 'test',
-        bop_path / 'itodd' / 'test',
-        bop_path / 'hb' / 'test_kinect',
-        bop_path / 'hb' / 'test_primesense',
-        bop_path / 'ycbv' / 'test',
-        bop_path / 'handal' / 'test',
-    ]
+    folders = {
+        "lmo": bop_path / 'lmo' / 'test',
+        "tless": bop_path / 'tless' / 'test_primesense',
+        "tudl": bop_path / 'tudl' / 'test',
+        "icbin": bop_path / 'icbin' / 'test',
+        "itodd": bop_path / 'itodd' / 'test',
+        "hb_kinect": bop_path / 'hb' / 'test_kinect',
+        "hb_primesense": bop_path / 'hb' / 'test_primesense',
+        "ycbv": bop_path / 'ycbv' / 'test',
+        "handal": bop_path / 'handal' / 'test',
+    }
 
-    for folder_path in tqdm(folder_paths, desc="Datasets"):
+    if args.dataset:
+        targets = [folders[args.dataset]]
+    else:
+        targets = list(folders.values())
+
+    for folder_path in tqdm(targets, desc="Datasets"):
         infer_masks_for_folder(folder_path, cfg)

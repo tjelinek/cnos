@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
 
+import torch
+
 from repositories.cnos.src.model.fast_sam import FastSAM
 
 sys.path.append(str((Path(__file__).parent).resolve()))

@@ -87,7 +87,7 @@ class Detections:
             data = self.load_from_file(data)
         for key, value in data.items():
             setattr(self, key, value)
-        self.keys = list(data.keys())
+        self.keys = list(data.keys()) if isinstance(data, dict) else data._stats.keys()
         if "boxes" in self.keys:
             if isinstance(self.boxes, np.ndarray):
                 self.to_torch()

@@ -143,7 +143,9 @@ class CustomSamAutomaticMaskGenerator(SamAutomaticMaskGenerator):
 
         data["masks"] = [torch.from_numpy(rle_to_mask(rle)) for rle in data["rles"]]
         data["masks"] = torch.stack(data["masks"])
-        return data
+        data["masks"] = data["masks"].to(data["boxes"].device)
+        # return data
+        return {"masks": data["masks"], "boxes": data["boxes"]}
 
     def remove_small_detections(self, mask_data: MaskData, img_size: List) -> MaskData:
         # calculate area and number of pixels in each mask

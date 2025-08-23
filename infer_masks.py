@@ -31,15 +31,20 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig):
     visual_dir = base_dir / "cnos_sam_visual"
     proposals_dir.mkdir(parents=True, exist_ok=True)
     visual_dir.mkdir(parents=True, exist_ok=True)
-    for img_path in sorted(folder.glob("*.png")):
-        img_name = img_path.stem
-        img = np.array(Image.open(img_path).convert("RGB"))
-        masks = gen.generate(img)
-        for i, m in enumerate(masks):
-            mask_uint8 = (m["segmentation"].astype(np.uint8) * 255)
-            cv2.imwrite(str(proposals_dir / f"{img_name}_{i:06d}.png"), mask_uint8)
-            vis = overlay_mask(img, m["segmentation"].astype(np.float32))
-            cv2.imwrite(str(visual_dir / f"{img_name}_{i:06d}.jpg"), cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
+    for sequence in folder.iterdir():
+        image_folder = sequence / 'rgb'
+        if not image_folder.exists():
+            image_folder = sequence / 'grayscale'
+        for img_path in image_folder.iterdir():
+            img_name = img_path.stem
+            img = np.array(Image.open(img_path).convert("RGB"))
+            masks = gen.generate(img)
+            for i, m in enumerate(masks):
+                mask_uint8 = (m["segmentation"].astype(np.uint8) * 255)
+                vis = overlay_mask(img, m["segmentation"].astype(np.float32))
+                breakpoint()
+                cv2.imwrite(str(proposals_dir / f"{img_name}_{i:06d}.png"), mask_uint8)
+                cv2.imwrite(str(visual_dir / f"{img_name}_{i:06d}.jpg"), cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
 
 
 if __name__ == "__main__":
@@ -48,7 +53,18 @@ if __name__ == "__main__":
         cfg = compose(config_name="run_inference")
 
     base_path = Path('/mnt/personal/jelint19/data/')
-    folder_paths = []
+    bop_path = base_path / 'bop'
+    folder_paths = [
+        bop_path / 'lmo' / 'test',
+        bop_path / 'tless' / 'test_primesense',
+        bop_path / 'tudl' / 'test',
+        bop_path / 'icbin' / 'test',
+        bop_path / 'itodd' / 'test',
+        bop_path / 'hb' / 'test_kinect',
+        bop_path / 'hb' / 'test_primesense',
+        bop_path / 'ycbv' / 'test',
+        bop_path / 'handal' / 'test',
+    ]
 
     for folder_path in folder_paths:
         infer_masks_for_folder(folder_path, cfg)

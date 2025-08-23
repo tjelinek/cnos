@@ -1,5 +1,10 @@
+import pickle
 import sys
 from pathlib import Path
+
+import torch
+from segment_anything.utils.amg import mask_to_rle_pytorch
+
 from repositories.cnos.src.model.fast_sam import FastSAM
 
 sys.path.append(str((Path(__file__).parent).resolve()))
@@ -28,23 +33,39 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig):
             continue
 
         segment_model_name = 'fastsam' if isinstance(cnos_model.segmentor_model, FastSAM) else 'sam'
-        proposals_dir = sequence / f"cnos_{segment_model_name}_proposals"
+        proposals_dir = sequence / f"cnos_{segment_model_name}_detections"
         visual_dir = sequence / f"cnos_{segment_model_name}_visual"
         proposals_dir.mkdir(parents=True, exist_ok=True)
         visual_dir.mkdir(parents=True, exist_ok=True)
 
-        for img_path in tqdm(sorted(image_folder.iterdir()), leave=False, desc=f"Images in {sequence.name}"):
+        all_images = sorted(image_folder.iterdir())
+        for img_idx, img_path in tqdm(enumerate(all_images),
+                                      leave=False, desc=f"Images in {sequence.name}"):
             img_name = img_path.stem
             img = np.array(Image.open(img_path).convert("RGB"))
             detections = cnos_model.get_filtered_detections(img)
 
             masks = detections.masks
             detections_descriptors = cnos_model.descriptor_model(img, detections)
-            for i, m in enumerate(masks):
-                mask_uint8 = (m["segmentation"].astype(np.uint8) * 255)
-                vis = overlay_mask(img, m["segmentation"].astype(np.float32))
-                cv2.imwrite(str(proposals_dir / f"{img_name}_{i:06d}.png"), mask_uint8)
-                cv2.imwrite(str(visual_dir / f"{img_name}_{i:06d}.jpg"), cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
+            masks_rle = mask_to_rle_pytorch(masks.to(torch.long))
+
+            detection_dict = {
+                "masks": masks_rle,
+                "descriptors": detections_descriptors.numpy(force=True),
+            }
+
+            pickle_path = f"{proposals_dir}/{img_name}.pkl"
+            with open(pickle_path, "wb") as pickle_file:
+                pickle.dump(detection_dict, pickle_file)
+
+            all_images_div_10 = len(all_images) // 10
+            all_images_div_10 = round(all_images_div_10, -1)
+            if img_idx % all_images_div_10 == 0:
+                for i, m in enumerate(masks):
+                    mask_uint8 = (m.numpy(force=True).astype(np.uint8) * 255)
+                    vis = overlay_mask(img, m.numpy(force=True).astype(np.float32))
+                    # cv2.imwrite(str(proposals_dir / f"{img_name}_{i:06d}.png"), mask_uint8)
+                    cv2.imwrite(str(visual_dir / f"{img_name}_{i:06d}.jpg"), cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
 
 
 if __name__ == "__main__":

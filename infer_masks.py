@@ -21,12 +21,6 @@ from repositories.cnos.src.model.detector import CNOS
 def infer_masks_for_folder(folder: Path, cfg: DictConfig):
     cnos_model: CNOS = instantiate(cfg.model).to('cuda')
     cnos_model.move_to_device()
-    if hasattr(cnos_model.segmentor_model, "predictor"):
-        cnos_model.segmentor_model.predictor.model = (
-            cnos_model.segmentor_model.predictor.model.to('cuda')
-        )
-    else:
-        cnos_model.segmentor_model.model.setup_model(device=torch.device('cuda'), verbose=True)
     folder = folder.resolve()
 
     for sequence in tqdm(sorted(folder.iterdir()), desc=f"[{folder}] Sequences"):

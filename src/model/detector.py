@@ -168,13 +168,9 @@ class CNOS(pl.LightningModule):
 
         # run propoals
         proposal_stage_start_time = time.time()
-        proposals = self.segmentor_model.generate_masks(image_np)
 
-        # init detections with masks and boxes
-        detections = Detections(proposals)
-        detections.remove_very_small_detections(
-            config=self.post_processing_config.mask_post_processing
-        )
+        detections = self.get_filtered_detections(image_np)
+
         # compute descriptors
         query_decriptors = self.descriptor_model(image_np, detections)
         proposal_stage_end_time = time.time()
@@ -231,6 +227,15 @@ class CNOS(pl.LightningModule):
             matching_stage=matching_stage_end_time - matching_stage_start_time,
         )
         return 0
+
+    def get_filtered_detections(self, image_np: np.ndarray) -> Detections:
+        proposals = self.segmentor_model.generate_masks(image_np)
+        # init detections with masks and boxes
+        detections = Detections(proposals)
+        detections.remove_very_small_detections(
+            config=self.post_processing_config.mask_post_processing
+        )
+        return detections
 
     def on_test_epoch_end(self):
         if self.global_rank == 0:  # only rank 0 process

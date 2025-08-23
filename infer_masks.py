@@ -30,10 +30,6 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig):
     gen = build_generator(cfg)
     folder = folder.resolve()
     base_dir = folder.parent
-    proposals_dir = base_dir / "cnos_sam_proposals"
-    visual_dir = base_dir / "cnos_sam_visual"
-    proposals_dir.mkdir(parents=True, exist_ok=True)
-    visual_dir.mkdir(parents=True, exist_ok=True)
 
     for sequence in tqdm(sorted(folder.iterdir()), desc=f"[{folder}] Sequences"):
         image_folder = sequence / 'rgb'
@@ -41,6 +37,11 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig):
             image_folder = sequence / 'grayscale'
         if not image_folder.exists():
             continue
+
+        proposals_dir = sequence / "cnos_sam_proposals"
+        visual_dir = sequence / "cnos_sam_visual"
+        proposals_dir.mkdir(parents=True, exist_ok=True)
+        visual_dir.mkdir(parents=True, exist_ok=True)
 
         for img_path in tqdm(sorted(image_folder.iterdir()), leave=False, desc=f"Images in {sequence.name}"):
             img_name = img_path.stem

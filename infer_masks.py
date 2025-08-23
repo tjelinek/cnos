@@ -42,7 +42,6 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig):
             for i, m in enumerate(masks):
                 mask_uint8 = (m["segmentation"].astype(np.uint8) * 255)
                 vis = overlay_mask(img, m["segmentation"].astype(np.float32))
-                breakpoint()
                 cv2.imwrite(str(proposals_dir / f"{img_name}_{i:06d}.png"), mask_uint8)
                 cv2.imwrite(str(visual_dir / f"{img_name}_{i:06d}.jpg"), cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
 

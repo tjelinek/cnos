@@ -61,7 +61,7 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig):
 
             all_images_div_10 = len(all_images) // 10
             all_images_div_10 = round(all_images_div_10, -1)
-            if img_idx % all_images_div_10 == 0:
+            if img_idx % max(10, all_images_div_10) == 0:
                 for i, m in enumerate(masks):
                     mask_uint8 = (m.numpy(force=True).astype(np.uint8) * 255)
                     vis = overlay_mask(img, m.numpy(force=True).astype(np.float32))

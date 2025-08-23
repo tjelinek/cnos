@@ -2,9 +2,9 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 import cv2
-from hydra import compose
-from hydra import initialize_config_dir
+from hydra import compose, initialize_config_dir
 from omegaconf import DictConfig
+from tqdm import tqdm
 
 from repositories.cnos.src.model.sam import CustomSamAutomaticMaskGenerator, load_sam
 from utils.image_utils import overlay_mask
@@ -12,7 +12,10 @@ from utils.image_utils import overlay_mask
 
 def build_generator(cfg: DictConfig):
     seg_cfg = cfg.model.segmentor_model
-    sam = load_sam(model_type=seg_cfg.sam.model_type, checkpoint_dir=seg_cfg.sam.checkpoint_dir)
+    sam = load_sam(
+        model_type=seg_cfg.sam.model_type,
+        checkpoint_dir=seg_cfg.sam.checkpoint_dir
+    )
     return CustomSamAutomaticMaskGenerator(
         sam=sam,
         points_per_batch=seg_cfg.points_per_batch,
@@ -31,14 +34,19 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig):
     visual_dir = base_dir / "cnos_sam_visual"
     proposals_dir.mkdir(parents=True, exist_ok=True)
     visual_dir.mkdir(parents=True, exist_ok=True)
-    for sequence in folder.iterdir():
+
+    for sequence in tqdm(list(folder.iterdir()), desc=f"[{folder.name}] Sequences"):
         image_folder = sequence / 'rgb'
         if not image_folder.exists():
             image_folder = sequence / 'grayscale'
-        for img_path in image_folder.iterdir():
+        if not image_folder.exists():
+            continue
+
+        for img_path in tqdm(list(image_folder.iterdir()), leave=False, desc=f"Images in {sequence.name}"):
             img_name = img_path.stem
             img = np.array(Image.open(img_path).convert("RGB"))
             masks = gen.generate(img)
+
             for i, m in enumerate(masks):
                 mask_uint8 = (m["segmentation"].astype(np.uint8) * 255)
                 vis = overlay_mask(img, m["segmentation"].astype(np.float32))
@@ -65,5 +73,5 @@ if __name__ == "__main__":
         bop_path / 'handal' / 'test',
     ]
 
-    for folder_path in folder_paths:
+    for folder_path in tqdm(folder_paths, desc="Datasets"):
         infer_masks_for_folder(folder_path, cfg)

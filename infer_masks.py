@@ -15,7 +15,7 @@ def build_generator(cfg: DictConfig):
     sam = load_sam(
         model_type=seg_cfg.sam.model_type,
         checkpoint_dir=seg_cfg.sam.checkpoint_dir
-    )
+    ).to('cuda')
     return CustomSamAutomaticMaskGenerator(
         sam=sam,
         points_per_batch=seg_cfg.points_per_batch,
@@ -35,14 +35,14 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig):
     proposals_dir.mkdir(parents=True, exist_ok=True)
     visual_dir.mkdir(parents=True, exist_ok=True)
 
-    for sequence in tqdm(list(folder.iterdir()), desc=f"[{folder.name}] Sequences"):
+    for sequence in tqdm(sorted(folder.iterdir()), desc=f"[{folder}] Sequences"):
         image_folder = sequence / 'rgb'
         if not image_folder.exists():
             image_folder = sequence / 'grayscale'
         if not image_folder.exists():
             continue
 
-        for img_path in tqdm(list(image_folder.iterdir()), leave=False, desc=f"Images in {sequence.name}"):
+        for img_path in tqdm(sorted(image_folder.iterdir()), leave=False, desc=f"Images in {sequence.name}"):
             img_name = img_path.stem
             img = np.array(Image.open(img_path).convert("RGB"))
             masks = gen.generate(img)

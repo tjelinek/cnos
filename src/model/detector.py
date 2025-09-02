@@ -105,19 +105,23 @@ class CNOS(pl.LightningModule):
         logging.info(f"Moving models to {self.device} done!")
 
     def find_matched_proposals(self, proposal_decriptors):
+        aggregation_function = self.matching_config.aggregation_function
+        matching_max_num_instances = self.matching_config.max_num_instances
+        matching_confidence_thresh = self.matching_config.confidence_thresh
+
         # compute matching scores for each proposals
         scores = self.matching_config.metric(
             proposal_decriptors, self.ref_data["descriptors"]
         )  # N_proposals x N_objects x N_templates
-        if self.matching_config.aggregation_function == "mean":
+        if aggregation_function == "mean":
             score_per_proposal_and_object = (
                 torch.sum(scores, dim=-1) / scores.shape[-1]
             )  # N_proposals x N_objects
-        elif self.matching_config.aggregation_function == "median":
+        elif aggregation_function == "median":
             score_per_proposal_and_object = torch.median(scores, dim=-1)[0]
-        elif self.matching_config.aggregation_function == "max":
+        elif aggregation_function == "max":
             score_per_proposal_and_object = torch.max(scores, dim=-1)[0]
-        elif self.matching_config.aggregation_function == "avg_5":
+        elif aggregation_function == "avg_5":
             score_per_proposal_and_object = torch.topk(scores, k=5, dim=-1)[0]
             score_per_proposal_and_object = torch.mean(
                 score_per_proposal_and_object, dim=-1
@@ -126,18 +130,15 @@ class CNOS(pl.LightningModule):
             raise NotImplementedError
 
         # assign each proposal to the object with highest scores
-        score_per_proposal, assigned_idx_object = torch.max(
-            score_per_proposal_and_object, dim=-1
-        )  # N_query
+        score_per_proposal, assigned_idx_object = torch.max(score_per_proposal_and_object, dim=-1)  # N_query
 
-        idx_selected_proposals = torch.arange(
-            len(score_per_proposal), device=score_per_proposal.device
-        )[score_per_proposal > self.matching_config.confidence_thresh]
+        idx_proposals = torch.arange(len(score_per_proposal), device=score_per_proposal.device)
+        idx_selected_proposals = idx_proposals[score_per_proposal > matching_confidence_thresh]
         # for bop challenge, we only keep top 100 instances
-        if len(idx_selected_proposals) > self.matching_config.max_num_instances:
-            logging.info(f"Selecting top {self.matching_config.max_num_instances} instances ...")
+        if len(idx_selected_proposals) > matching_max_num_instances:
+            logging.info(f"Selecting top {matching_max_num_instances} instances ...")
             _, idx = torch.topk(
-                score_per_proposal[idx_selected_proposals], k=self.matching_config.max_num_instances
+                score_per_proposal[idx_selected_proposals], k=matching_max_num_instances
             )
             idx_selected_proposals = idx_selected_proposals[idx]
         pred_idx_objects = assigned_idx_object[idx_selected_proposals]

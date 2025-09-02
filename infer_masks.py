@@ -97,6 +97,7 @@ if __name__ == "__main__":
         "hb_primesense": bop_path / 'hb' / 'test_primesense',
         "ycbv": bop_path / 'ycbv' / 'test',
         "handal": bop_path / 'handal' / 'test',
+        "hope": bop_path / 'hope' / 'test',
     }
 
     if args.dataset:

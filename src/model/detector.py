@@ -2,15 +2,14 @@ import torch
 import torchvision.transforms as T
 from tqdm import tqdm
 import numpy as np
-from PIL import Image
 import logging
 import os
 import os.path as osp
-from torchvision.utils import make_grid, save_image
 import pytorch_lightning as pl
-from src.utils.inout import save_json, load_json, save_json_bop23
+
+from src.model.loss import PairwiseSimilarity
+from src.utils.inout import save_json_bop23
 from src.model.utils import BatchedData, Detections, convert_npz_to_json
-from hydra.utils import instantiate
 import time
 import glob
 from functools import partial
@@ -108,11 +107,11 @@ class CNOS(pl.LightningModule):
         aggregation_function = self.matching_config.aggregation_function
         matching_max_num_instances = self.matching_config.max_num_instances
         matching_confidence_thresh = self.matching_config.confidence_thresh
+        descriptors = self.ref_data["descriptors"]
+        similarity_function: PairwiseSimilarity = self.matching_config.metric
 
         # compute matching scores for each proposals
-        scores = self.matching_config.metric(
-            proposal_decriptors, self.ref_data["descriptors"]
-        )  # N_proposals x N_objects x N_templates
+        scores = similarity_function(proposal_decriptors, descriptors)  # N_proposals x N_objects x N_templates
         if aggregation_function == "mean":
             score_per_proposal_and_object = (
                 torch.sum(scores, dim=-1) / scores.shape[-1]

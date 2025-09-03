@@ -1,3 +1,5 @@
+from typing import Any, Dict, Tuple, List
+
 import torch
 import torchvision.transforms as T
 from tqdm import tqdm
@@ -14,6 +16,63 @@ import time
 import glob
 from functools import partial
 import multiprocessing
+
+
+def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor], proposal_descriptors: torch.Tensor,
+                                        similarity_function: PairwiseSimilarity, aggregation_function: str,
+                                        matching_confidence_thresh: float, matching_max_num_instances: int) -> \
+        Tuple[torch.Tensor, List[int], torch.Tensor, torch.Tensor]:
+
+    similarities = {k: similarity_function(proposal_descriptors, db_descriptors[k].unsqueeze(1)).squeeze()
+                    for k in db_descriptors.keys()}  # N_proposals x N_objects x N_templates
+
+    aggregated_similarities = {}
+    for obj_id in similarities.keys():
+        if aggregation_function == "mean":
+            # N_proposals x N_objects
+            score_per_proposal = (torch.sum(similarities[obj_id], dim=-1) / similarities[obj_id].shape[-1])
+        elif aggregation_function == "median":
+            score_per_proposal = torch.median(similarities[obj_id], dim=-1)[0]
+        elif aggregation_function == "max":
+            score_per_proposal = torch.max(similarities[obj_id], dim=-1)[0]
+        elif aggregation_function == "avg_5":
+            k = min(similarities[obj_id].shape[-1], 5)
+            score_per_proposal = torch.topk(similarities[obj_id], k=k, dim=-1)[0]
+            score_per_proposal = torch.mean(score_per_proposal, dim=-1)
+        else:
+            raise ValueError("Unknown aggregation function")
+
+        aggregated_similarities[obj_id] = score_per_proposal
+
+    sorted_db_keys = sorted(db_descriptors.keys())
+    score_per_proposal_and_object = torch.stack([aggregated_similarities[k] for k in sorted_db_keys], dim=-1)
+
+    # assign each proposal to the object with the highest scores
+    idx_selected_proposals, pred_idx_objects, pred_score_distribution, pred_scores = \
+        select_top_matching_proposals(score_per_proposal_and_object, matching_confidence_thresh,
+                                      matching_max_num_instances)
+
+    selected_objects = [sorted_db_keys[idx] for idx in pred_idx_objects.numpy(force=True)]
+    return idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution
+
+
+def select_top_matching_proposals(score_per_proposal_and_object: torch.Tensor, matching_confidence_thresh: float,
+                                  matching_max_num_instances: int) -> \
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    score_per_proposal, assigned_idx_object = torch.max(score_per_proposal_and_object, dim=-1)  # N_query
+    idx_proposals = torch.arange(len(score_per_proposal), device=score_per_proposal.device)
+    idx_selected_proposals = idx_proposals[score_per_proposal > matching_confidence_thresh]
+    # for bop challenge, we only keep top 100 instances
+    if len(idx_selected_proposals) > matching_max_num_instances:
+        logging.info(f"Selecting top {matching_max_num_instances} instances ...")
+        _, idx = torch.topk(
+            score_per_proposal[idx_selected_proposals], k=matching_max_num_instances
+        )
+        idx_selected_proposals = idx_selected_proposals[idx]
+    pred_idx_objects = assigned_idx_object[idx_selected_proposals]
+    pred_scores = score_per_proposal[idx_selected_proposals]
+    pred_score_distribution = score_per_proposal_and_object[idx_selected_proposals]
+    return idx_selected_proposals, pred_idx_objects, pred_score_distribution, pred_scores
 
 
 class CNOS(pl.LightningModule):
@@ -128,22 +187,9 @@ class CNOS(pl.LightningModule):
         else:
             raise NotImplementedError
 
-        # assign each proposal to the object with highest scores
-        score_per_proposal, assigned_idx_object = torch.max(score_per_proposal_and_object, dim=-1)  # N_query
-
-        idx_proposals = torch.arange(len(score_per_proposal), device=score_per_proposal.device)
-        idx_selected_proposals = idx_proposals[score_per_proposal > matching_confidence_thresh]
-        # for bop challenge, we only keep top 100 instances
-        if len(idx_selected_proposals) > matching_max_num_instances:
-            logging.info(f"Selecting top {matching_max_num_instances} instances ...")
-            _, idx = torch.topk(
-                score_per_proposal[idx_selected_proposals], k=matching_max_num_instances
-            )
-            idx_selected_proposals = idx_selected_proposals[idx]
-        pred_idx_objects = assigned_idx_object[idx_selected_proposals]
-        pred_scores = score_per_proposal[idx_selected_proposals]
-        pred_score_distribution = score_per_proposal_and_object[idx_selected_proposals]
-        return idx_selected_proposals, pred_idx_objects, pred_scores, pred_score_distribution
+        # assign each proposal to the object with the highest scores
+        return select_top_matching_proposals(score_per_proposal_and_object, matching_confidence_thresh,
+                                             matching_max_num_instances)
 
     def test_step(self, batch, idx):
         if idx == 0:

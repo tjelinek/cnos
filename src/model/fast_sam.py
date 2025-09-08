@@ -36,7 +36,6 @@ class CustomYOLO(YOLO):
         self.overrides["verbose"] = verbose
         self.overrides["imgsz"] = segmentor_width_size
 
-        self.overrides["conf"] = 0.25
         self.overrides["mode"] = "predict"
         self.overrides["save"] = False
 

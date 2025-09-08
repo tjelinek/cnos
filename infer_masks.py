@@ -20,7 +20,7 @@ from utils.image_utils import overlay_mask
 from repositories.cnos.src.model.detector import CNOS
 
 
-def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model: str):
+def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model_name: str):
     cnos_model: CNOS = instantiate(cfg.model).to('cuda')
     cnos_model.move_to_device()
     folder = folder.resolve()
@@ -32,7 +32,7 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model: str):
         if not image_folder.exists():
             continue
 
-        segment_model_name = 'fastsam' if cnos_model == 'cnos_fast' else 'sam'
+        segment_model_name = 'fastsam' if cnos_model_name == 'cnos_fast' else 'sam'
         proposals_dir = sequence / f"cnos_{segment_model_name}_detections"
         visual_dir = sequence / f"cnos_{segment_model_name}_visual"
         proposals_dir.mkdir(parents=True, exist_ok=True)

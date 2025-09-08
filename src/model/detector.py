@@ -21,7 +21,7 @@ import multiprocessing
 def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor], proposal_descriptors: torch.Tensor,
                                         similarity_function: PairwiseSimilarity, aggregation_function: str,
                                         matching_confidence_thresh: float, matching_max_num_instances: int) -> \
-        Tuple[torch.Tensor, List[int], torch.Tensor, torch.Tensor]:
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
 
     similarities = {k: similarity_function(proposal_descriptors, db_descriptors[k].unsqueeze(1)).squeeze()
                     for k in db_descriptors.keys()}  # N_proposals x N_objects x N_templates
@@ -52,7 +52,9 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
         select_top_matching_proposals(score_per_proposal_and_object, matching_confidence_thresh,
                                       matching_max_num_instances)
 
-    selected_objects = [sorted_db_keys[idx] for idx in pred_idx_objects.numpy(force=True)]
+    sorted_db_keys_tensor = torch.tensor(sorted_db_keys).to(pred_idx_objects.device)
+    selected_objects = sorted_db_keys_tensor[pred_idx_objects]
+
     return idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution
 
 

@@ -1,14 +1,11 @@
-import torch
-import torch.nn.functional as F
-import torchvision.transforms as T
-from torchvision.utils import make_grid, save_image
-import pytorch_lightning as pl
 import logging
-import numpy as np
-from src.utils.bbox_utils import CropResizePad, CustomResizeLongestSide
-from torchvision.utils import make_grid, save_image
+
+import pytorch_lightning as pl
+import torch
+import torchvision.transforms as T
+
 from src.model.utils import BatchedData
-from copy import deepcopy
+from src.utils.bbox_utils import CropResizePad, CustomResizeLongestSide
 
 descriptor_size = {
     "dinov2_vits14": 384,
@@ -72,22 +69,32 @@ class CustomDINOv2(pl.LightningModule):
     def compute_features(self, images, token_name):
         if token_name == "x_norm_clstoken":
             if images.shape[0] > self.chunk_size:
-                features = self.forward_by_chunk(images)
+                cls_features, spatial_patch_features = self.forward_by_chunk(images)
             else:
-                features = self.model(images)
+                model_output = self.model.forward_features(images)
+                cls_features = model_output['x_norm_clstoken']
+                patch_features = model_output['x_norm_patchtokens']
+
+                batch_size, num_patches, hidden_dim = patch_features.shape
+                grid_size = int(num_patches ** 0.5)
+                spatial_patch_features = patch_features.reshape(batch_size, grid_size, grid_size, hidden_dim)
+
         else:  # get both features
             raise NotImplementedError
-        return features
+        return cls_features, spatial_patch_features
 
     @torch.no_grad()
     def forward_by_chunk(self, processed_rgbs):
         batch_rgbs = BatchedData(batch_size=self.chunk_size, data=processed_rgbs)
         del processed_rgbs  # free memory
-        features = BatchedData(batch_size=self.chunk_size)
+        cls_features = BatchedData(batch_size=self.chunk_size)
+        spatial_patch_features = BatchedData(batch_size=self.chunk_size)
         for idx_batch in range(len(batch_rgbs)):
-            feats = self.compute_features(batch_rgbs[idx_batch], token_name="x_norm_clstoken")
-            features.cat(feats)
-        return features.data
+            cls_feats, spatial_patch_feats = self.compute_features(batch_rgbs[idx_batch], token_name="x_norm_clstoken")
+            cls_features.cat(cls_feats)
+            spatial_patch_features.cat(spatial_patch_feats)
+
+        return cls_features.data, spatial_patch_features.data
 
 
     @torch.no_grad()

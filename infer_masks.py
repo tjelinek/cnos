@@ -2,11 +2,10 @@ import argparse
 import pickle
 import sys
 from pathlib import Path
+from time import time
 
 import torch
 from segment_anything.utils.amg import mask_to_rle_pytorch
-
-from repositories.cnos.src.model.fast_sam import FastSAM
 
 sys.path.append(str((Path(__file__).parent).resolve()))
 import numpy as np
@@ -21,7 +20,7 @@ from utils.image_utils import overlay_mask
 from repositories.cnos.src.model.detector import CNOS
 
 
-def infer_masks_for_folder(folder: Path, cfg: DictConfig):
+def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model: str):
     cnos_model: CNOS = instantiate(cfg.model).to('cuda')
     cnos_model.move_to_device()
     folder = folder.resolve()
@@ -33,7 +32,7 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig):
         if not image_folder.exists():
             continue
 
-        segment_model_name = 'fastsam' if isinstance(cnos_model.segmentor_model, FastSAM) else 'sam'
+        segment_model_name = 'fastsam' if cnos_model == 'cnos_fast' else 'sam'
         proposals_dir = sequence / f"cnos_{segment_model_name}_detections"
         visual_dir = sequence / f"cnos_{segment_model_name}_visual"
         proposals_dir.mkdir(parents=True, exist_ok=True)
@@ -44,15 +43,28 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig):
                                       leave=False, desc=f"Images in {sequence.name}"):
             img_name = img_path.stem
             img = np.array(Image.open(img_path).convert("RGB"))
+            start_time = time()
+            torch.cuda.synchronize()
             detections = cnos_model.get_filtered_detections(img)
+            torch.cuda.synchronize()
+            detections_time = time() - start_time
 
             masks = detections.masks
-            detections_descriptors = cnos_model.descriptor_model(img, detections)
-            masks_rle = mask_to_rle_pytorch(masks.to(torch.long))
+
+            start_time = time()
+            torch.cuda.synchronize()
+            detections_cls_descriptors, detections_patch_desriptors = cnos_model.descriptor_model(img, detections)
+            torch.cuda.synchronize()
+            description_time = time() - start_time
+
+            masks_rle = mask_to_rle_pytorch((masks > 0).to(torch.long))
 
             detection_dict = {
                 "masks": masks_rle,
-                "descriptors": detections_descriptors.numpy(force=True),
+                "descriptors": detections_cls_descriptors.numpy(force=True),
+                "patch_descriptors": detections_patch_desriptors.numpy(force=True),
+                "detection_time": detections_time,
+                "description_time": description_time,
             }
 
             pickle_path = f"{proposals_dir}/{img_name}.pkl"
@@ -106,4 +118,4 @@ if __name__ == "__main__":
         targets = list(folders.values())
 
     for folder_path in tqdm(targets, desc="Datasets"):
-        infer_masks_for_folder(folder_path, cfg)
+        infer_masks_for_folder(folder_path, cfg, model)

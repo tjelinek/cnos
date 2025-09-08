@@ -82,7 +82,7 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model_name: str):
 
 
 if __name__ == "__main__":
-    model = 'cnos_fast'
+    model = 'cnos'
 
     parser = argparse.ArgumentParser()
     parser.add_argument(

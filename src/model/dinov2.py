@@ -85,9 +85,7 @@ class CustomDINOv2(pl.LightningModule):
         del processed_rgbs  # free memory
         features = BatchedData(batch_size=self.chunk_size)
         for idx_batch in range(len(batch_rgbs)):
-            feats = self.compute_features(
-                batch_rgbs[idx_batch], token_name="x_norm_clstoken"
-            )
+            feats = self.compute_features(batch_rgbs[idx_batch], token_name="x_norm_clstoken")
             features.cat(feats)
         return features.data
 

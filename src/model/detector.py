@@ -23,8 +23,10 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
                                         matching_confidence_thresh: float, matching_max_num_instances: int) -> \
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
 
+    sorted_db_keys = sorted(db_descriptors.keys())
+
     similarities = {k: similarity_function(proposal_descriptors, db_descriptors[k].unsqueeze(1)).squeeze()
-                    for k in db_descriptors.keys()}  # N_proposals x N_objects x N_templates
+                    for k in sorted_db_keys}  # N_proposals x N_objects x N_templates
 
     aggregated_similarities = {}
     for obj_id in similarities.keys():
@@ -44,7 +46,6 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
 
         aggregated_similarities[obj_id] = score_per_proposal
 
-    sorted_db_keys = sorted(db_descriptors.keys())
     score_per_proposal_and_object = torch.stack([aggregated_similarities[k] for k in sorted_db_keys], dim=-1)
 
     # assign each proposal to the object with the highest scores

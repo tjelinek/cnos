@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple, List
+from typing import Any, Dict, Tuple, List, Optional
 
 import torch
 import torchvision.transforms as T
@@ -21,13 +21,14 @@ import multiprocessing
 def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor], proposal_descriptors: torch.Tensor,
                                         similarity_function: PairwiseSimilarity, aggregation_function: str,
                                         matching_confidence_thresh: float, matching_max_num_instances: int) -> \
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
 
     sorted_db_keys = sorted(db_descriptors.keys())
 
     similarities = {k: similarity_function(proposal_descriptors, db_descriptors[k].unsqueeze(1)).squeeze()
                     for k in sorted_db_keys}  # N_proposals x N_objects x N_templates
 
+    score_per_proposal_topk = None
     aggregated_similarities = {}
     for obj_id in similarities.keys():
         if aggregation_function == "mean":
@@ -39,8 +40,8 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
             score_per_proposal = torch.max(similarities[obj_id], dim=-1)[0]
         elif aggregation_function == "avg_5":
             k = min(similarities[obj_id].shape[-1], 5)
-            score_per_proposal = torch.topk(similarities[obj_id], k=k, dim=-1)[0]
-            score_per_proposal = torch.mean(score_per_proposal, dim=-1)
+            score_per_proposal_topk = torch.topk(similarities[obj_id], k=k, dim=-1)
+            score_per_proposal = torch.mean(score_per_proposal_topk[0], dim=-1)
         else:
             raise ValueError("Unknown aggregation function")
 
@@ -56,7 +57,13 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
     sorted_db_keys_tensor = torch.tensor(sorted_db_keys).to(pred_idx_objects.device)
     selected_objects = sorted_db_keys_tensor[pred_idx_objects]
 
-    return idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution
+    score_per_proposal_topk_selected = None
+    if score_per_proposal_topk is not None:
+        score_per_proposal_topk_selected = (score_per_proposal_topk[0][idx_selected_proposals],
+                                            score_per_proposal_topk[1][idx_selected_proposals])
+
+    return (idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution,
+            score_per_proposal_topk_selected)
 
 
 def select_top_matching_proposals(score_per_proposal_and_object: torch.Tensor, matching_confidence_thresh: float,

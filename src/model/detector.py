@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple, List, Optional
+from typing import Any, Dict, Tuple, Optional
 
 import torch
 import torchvision.transforms as T
@@ -28,7 +28,7 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
     similarities = {k: similarity_function(proposal_descriptors, db_descriptors[k].unsqueeze(1)).squeeze()
                     for k in sorted_db_keys}  # N_proposals x N_objects x N_templates
 
-    score_per_proposal_topk = None
+    per_obj_proposal_topk_templates = {}
     aggregated_similarities = {}
     for obj_id in similarities.keys():
         if aggregation_function == "mean":
@@ -40,8 +40,9 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
             score_per_proposal = torch.max(similarities[obj_id], dim=-1)[0]
         elif aggregation_function == "avg_5":
             k = min(similarities[obj_id].shape[-1], 5)
-            score_per_proposal_topk = torch.topk(similarities[obj_id], k=k, dim=-1)
-            score_per_proposal = torch.mean(score_per_proposal_topk[0], dim=-1)
+            obj_i_proposal_topk_templates = torch.topk(similarities[obj_id], k=k, dim=-1)
+            score_per_proposal = torch.mean(obj_i_proposal_topk_templates[0], dim=-1)
+            per_obj_proposal_topk_templates[obj_id] = obj_i_proposal_topk_templates
         else:
             raise ValueError("Unknown aggregation function")
 
@@ -57,10 +58,34 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
     sorted_db_keys_tensor = torch.tensor(sorted_db_keys).to(pred_idx_objects.device)
     selected_objects = sorted_db_keys_tensor[pred_idx_objects]
 
-    score_per_proposal_topk_selected = None
-    if score_per_proposal_topk is not None:
-        score_per_proposal_topk_selected = (score_per_proposal_topk[0][idx_selected_proposals],
-                                            score_per_proposal_topk[1][idx_selected_proposals])
+    top5_template_id_per_detection = []
+    top5_scores_per_detection = []
+    for i in range(len(selected_objects)):
+        selected_object_id = selected_objects[i].item()
+        topk_per_selected_obj_id = per_obj_proposal_topk_templates[selected_object_id]
+        topk_template_indices_per_selected_obj_id_and_proposal = topk_per_selected_obj_id[1][i]
+        topk_template_scores_per_selected_obj_id_and_proposal = topk_per_selected_obj_id[0][i]
+
+        if topk_template_indices_per_selected_obj_id_and_proposal.numel() < 5:
+            pad_len = 5 - topk_template_indices_per_selected_obj_id_and_proposal.numel()
+            topk_template_indices_per_selected_obj_id_and_proposal = torch.cat(
+                [topk_template_indices_per_selected_obj_id_and_proposal,
+                 -1 * torch.ones(pad_len, dtype=topk_template_indices_per_selected_obj_id_and_proposal.dtype,
+                                 device=topk_template_indices_per_selected_obj_id_and_proposal.device)]
+            )
+            topk_template_scores_per_selected_obj_id_and_proposal = torch.cat(
+                [topk_template_scores_per_selected_obj_id_and_proposal,
+                 -1 * torch.ones(pad_len, dtype=topk_template_scores_per_selected_obj_id_and_proposal.dtype,
+                                 device=topk_template_scores_per_selected_obj_id_and_proposal.device)]
+            )
+
+        top5_template_id_per_detection.append(topk_template_indices_per_selected_obj_id_and_proposal)
+        top5_scores_per_detection.append(topk_template_scores_per_selected_obj_id_and_proposal)
+
+    top5_template_id_per_detection = torch.stack(top5_template_id_per_detection)
+    top5_scores_per_detection = torch.stack(top5_scores_per_detection)
+
+    score_per_proposal_topk_selected = (top5_scores_per_detection, top5_template_id_per_detection)
 
     return (idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution,
             score_per_proposal_topk_selected)

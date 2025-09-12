@@ -25,7 +25,8 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model_name: str):
     cnos_model.move_to_device()
     folder = folder.resolve()
 
-    for sequence in tqdm(sorted(folder.iterdir()), desc=f"[{folder}] Sequences"):
+    all_sequences = sorted(folder.iterdir())
+    for sequence in tqdm(all_sequences, desc=f"[{folder}] Sequences", total=len(all_sequences)):
         image_folder = sequence / 'rgb'
         if not image_folder.exists():
             image_folder = sequence / 'grayscale'
@@ -39,7 +40,7 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model_name: str):
         visual_dir.mkdir(parents=True, exist_ok=True)
 
         all_images = sorted(image_folder.iterdir())
-        for img_idx, img_path in tqdm(enumerate(all_images),
+        for img_idx, img_path in tqdm(enumerate(all_images), total=len(all_images),
                                       leave=False, desc=f"Images in {sequence.name}"):
             img_name = img_path.stem
             img = np.array(Image.open(img_path).convert("RGB"))

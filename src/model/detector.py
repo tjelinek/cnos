@@ -271,7 +271,7 @@ class CNOS(pl.LightningModule):
         detections = self.get_filtered_detections(image_np)
 
         # compute descriptors
-        query_decriptors = self.descriptor_model(image_np, detections)
+        query_decriptors = self.descriptor_model(image_np, detections)[0]
         proposal_stage_end_time = time.time()
 
         # matching descriptors

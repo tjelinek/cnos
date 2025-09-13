@@ -110,9 +110,7 @@ class Detections:
         for object_id in torch.unique(self.object_ids):
             idx = self.object_ids == object_id
             idx_object_id = all_indexes[idx]
-            keep_idx = torchvision.ops.nms(
-                self.boxes[idx].float(), self.scores[idx].float(), nms_thresh
-            )
+            keep_idx = torchvision.ops.nms(self.boxes[idx].float(), self.scores[idx].float(), nms_thresh)
             keep_idxs.cat(idx_object_id[keep_idx])
         keep_idxs = keep_idxs.data
         for key in self.keys:

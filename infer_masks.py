@@ -20,7 +20,7 @@ from utils.image_utils import overlay_mask
 from repositories.cnos.src.model.detector import CNOS
 
 
-def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model_name: str):
+def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model_name: str, recompute):
     cnos_model: CNOS = instantiate(cfg.model).to('cuda')
     cnos_model.move_to_device()
     folder = folder.resolve()
@@ -43,6 +43,10 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model_name: str):
         for img_idx, img_path in tqdm(enumerate(all_images), total=len(all_images),
                                       leave=False, desc=f"Images in {sequence.name}"):
             img_name = img_path.stem
+
+            pickle_path = Path(f"{proposals_dir}/{img_name}.pkl")
+            if pickle_path.exists():
+                continue
             img = np.array(Image.open(img_path).convert("RGB"))
             start_time = time()
             torch.cuda.synchronize()
@@ -68,7 +72,6 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model_name: str):
                 "description_time": description_time,
             }
 
-            pickle_path = f"{proposals_dir}/{img_name}.pkl"
             with open(pickle_path, "wb") as pickle_file:
                 pickle.dump(detection_dict, pickle_file)
 
@@ -119,4 +122,4 @@ if __name__ == "__main__":
         targets = list(folders.values())
 
     for folder_path in tqdm(targets, desc="Datasets"):
-        infer_masks_for_folder(folder_path, cfg, model)
+        infer_masks_for_folder(folder_path, cfg, model, True)

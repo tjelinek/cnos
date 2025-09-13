@@ -8,6 +8,7 @@ import logging
 import os
 import os.path as osp
 import pytorch_lightning as pl
+import torch.nn.functional as F
 
 from src.model.loss import PairwiseSimilarity
 from src.utils.inout import save_json_bop23
@@ -18,15 +19,32 @@ from functools import partial
 import multiprocessing
 
 
-def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor], proposal_descriptors: torch.Tensor,
+def compute_templates_similarity_scores(db_descriptors: Dict[Any, Tuple[torch.Tensor, torch.Tensor]],
+                                        db_segmentations: torch.Tensor, proposal_cls_descriptors: torch.Tensor,
+                                        proposal_dense_descriptors: torch.Tensor, proposal_masks: torch.Tensor,
                                         similarity_function: PairwiseSimilarity, aggregation_function: str,
-                                        matching_confidence_thresh: float, matching_max_num_instances: int) -> \
+                                        matching_confidence_thresh: float, matching_max_num_instances: int,
+                                        patch_descriptor_similarity: bool = False) -> \
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
 
     sorted_db_keys = sorted(db_descriptors.keys())
 
-    similarities = {k: similarity_function(proposal_descriptors, db_descriptors[k].unsqueeze(1)).squeeze()
+    similarities = {k: similarity_function(proposal_cls_descriptors, db_descriptors[k][0].unsqueeze(1)).squeeze()
                     for k in sorted_db_keys}  # N_proposals x N_objects x N_templates
+
+    if patch_descriptor_similarity:
+        proposal_dense_descriptors = F.interpolate(
+            proposal_dense_descriptors.permute(0, 3, 1, 2), size=tuple(proposal_masks.shape[-2:]), mode='bilinear',
+            align_corners=False
+        ).permute(0, 2, 3, 1)
+
+        db_dense_descriptors = {
+            F.interpolate(
+                db_descriptors[k][1].permute(0, 3, 1, 2), size=tuple(db_segmentations.shape[-2:]), mode='bilinear',
+                align_corners=False
+            ).permute(0, 2, 3, 1)
+            for k in sorted_db_keys
+        }
 
     per_obj_proposal_topk_templates = {}
     aggregated_similarities = {}
@@ -39,7 +57,7 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
         elif aggregation_function == "max":
             score_per_proposal = torch.max(similarities[obj_id], dim=-1)[0]
         elif aggregation_function == "avg_5":
-            k = min(similarities[obj_id].shape[-1], 5)
+            k = min(similarities[obj_id].shape[-1], 2)
             obj_i_proposal_topk_templates = torch.topk(similarities[obj_id], k=k, dim=-1)
             score_per_proposal = torch.mean(obj_i_proposal_topk_templates[0], dim=-1)
             per_obj_proposal_topk_templates[obj_id] = obj_i_proposal_topk_templates

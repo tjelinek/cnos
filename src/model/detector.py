@@ -187,7 +187,7 @@ class CNOS(pl.LightningModule):
                 desc="Computing descriptors ...",
             ):
                 ref_imgs = self.ref_dataset[idx]["templates"].to(self.device)
-                ref_feats = self.descriptor_model.compute_features(
+                ref_feats, patch_feats = self.descriptor_model.compute_features(
                     ref_imgs, token_name="x_norm_clstoken"
                 )
                 self.ref_data["descriptors"].append(ref_feats)

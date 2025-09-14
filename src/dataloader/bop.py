@@ -1,18 +1,19 @@
-import logging, os
+import logging
+import os
 import os.path as osp
-from tqdm import tqdm
-import time
-import numpy as np
-import torchvision.transforms as T
 from pathlib import Path
+
+import numpy as np
+import pytorch_lightning as pl
+import torch
+import torchvision.transforms as T
 from PIL import Image
 from torch.utils.data import Dataset
-import os.path as osp
-from src.poses.utils import load_index_level_in_level2
-import torch
-from src.utils.bbox_utils import CropResizePad
-import pytorch_lightning as pl
+from tqdm import tqdm
+
 from src.dataloader.base_bop import BaseBOP
+from src.poses.utils import load_index_level_in_level2
+from src.utils.bbox_utils import CropResizePad
 
 pl.seed_everything(2023)
 
@@ -201,8 +202,8 @@ class BaseBOPTest(BaseBOP):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    from omegaconf import DictConfig, OmegaConf
-    from torchvision.utils import make_grid, save_image
+    from omegaconf import OmegaConf
+    from torchvision.utils import save_image
 
     processing_config = OmegaConf.create(
         {

@@ -367,23 +367,14 @@ class CNOS(pl.LightningModule):
             result_paths = sorted(
                 [path for path in result_paths if "runtime" not in path]
             )
-            num_workers = 10
-            logging.info(f"Converting npz to json requires {num_workers} workers ...")
-            pool = multiprocessing.Pool(processes=num_workers)
-            convert_npz_to_json_with_idx = partial(
-                convert_npz_to_json,
-                list_npz_paths=result_paths,
-            )
-            detections = list(
-                tqdm(
-                    pool.imap_unordered(
-                        convert_npz_to_json_with_idx, range(len(result_paths))
-                    ),
-                    total=len(result_paths),
-                    desc="Converting npz to json",
-                )
-            )
+
+            logging.info(f"Converting {len(result_paths)} npz files to json ...")
+            detections = []
+            for idx in tqdm(range(len(result_paths)), desc="Converting npz to json"):
+                results = convert_npz_to_json(idx, result_paths)
+                detections.append(results)
             formatted_detections = []
+
             formatted_detections_with_score_distribution = []
             for detection in tqdm(detections, desc="Loading results ..."):
                 formatted_detections.extend(detection[0])

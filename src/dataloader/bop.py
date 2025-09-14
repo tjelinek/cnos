@@ -140,11 +140,17 @@ class BOPTemplate(Dataset):
             for idx_img in tqdm(selected_idx):
                 image = Image.open(obj_images[idx_img])
                 mask = Image.open(obj_masks[idx_img])
-                image = np.asarray(image) * np.expand_dims(np.asarray(mask) > 0, -1)
+                mask_array = np.asarray(mask).squeeze() > 0
+                if len(mask_array.shape) == 3:
+                    mask_array = mask_array.sum(axis=-1).astype(np.uint8)
+                mask_array = np.expand_dims(mask_array, -1)
+                image = np.asarray(image) * mask_array
                 image = Image.fromarray(image)
                 boxes.append(mask.getbbox())
 
-                mask = torch.from_numpy(np.array(mask) / 255).float()
+                mask = torch.from_numpy(np.array(mask) / 255).float().squeeze()
+                if len(mask.shape) == 3:
+                    mask = mask[..., 0]
                 masks.append(mask.unsqueeze(-1))
 
                 image = torch.from_numpy(np.array(image.convert("RGB")) / 255).float()

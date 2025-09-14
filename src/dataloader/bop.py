@@ -103,10 +103,13 @@ class BOPTemplate(Dataset):
         templates, masks, boxes = [], [], []
         static_onboarding = True if "onboarding_static" in self.template_dir else False
         if static_onboarding:
-            obj_dirs = [
-                f"{self.template_dir}/obj_{self.obj_ids[idx]:06d}_up",
-                f"{self.template_dir}/obj_{self.obj_ids[idx]:06d}_down",
-            ]
+            up_path = f"{self.template_dir}/obj_{self.obj_ids[idx]:06d}_up"
+            obj_dirs = [up_path]
+            down_path = f"{self.template_dir}/obj_{self.obj_ids[idx]:06d}_down"
+            if Path(down_path).exists():
+                obj_dirs.append(down_path)
+            else:
+                obj_dirs.append(up_path)
             num_selected_imgs = self.num_imgs_per_obj // 2  # 100 for 2 videos
         else:
             obj_dirs = [

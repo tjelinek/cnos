@@ -49,6 +49,7 @@ class BOPTemplate(Dataset):
         else:
             self.use_gray_background = False
         self.num_imgs_per_obj = num_imgs_per_obj  # to avoid memory issue
+        self.take_all = 'matchability_images' in template_dir
         self.obj_ids = obj_ids
         self.processing_config = processing_config
         self.rgb_transform = T.Compose(
@@ -131,9 +132,10 @@ class BOPTemplate(Dataset):
             assert len(obj_images) == len(
                 obj_masks
             ), f"rgb and mask mismatch in {obj_dir}"
-            selected_idx = np.random.choice(
-                len(obj_images), num_selected_imgs, replace=False
-            )
+            if self.take_all:
+                selected_idx = range(len(obj_images))
+            else:
+                selected_idx = np.random.choice(len(obj_images), num_selected_imgs, replace=False)
             for idx_img in tqdm(selected_idx):
                 image = Image.open(obj_images[idx_img])
                 mask = Image.open(obj_masks[idx_img])

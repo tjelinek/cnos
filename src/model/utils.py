@@ -3,6 +3,7 @@ import logging
 import numpy as np
 import torch
 import torchvision
+from segment_anything.utils.amg import mask_to_rle_pytorch
 from torchvision.ops.boxes import box_area
 
 from src.utils.bbox_utils import xyxy_to_xywh, xywh_to_xyxy, force_binary_mask
@@ -202,7 +203,11 @@ class Detections:
 
 def convert_npz_to_json(idx, list_npz_paths):
     npz_path = list_npz_paths[idx]
-    detections = np.load(npz_path)
+
+    detections = {}
+    with np.load(npz_path) as npz_file:
+        detections = {key: npz_file[key] for key in npz_file.keys()}
+
     results = []
     results_with_score_distribution = []
     for idx_det in range(len(detections["bbox"])):
@@ -215,9 +220,7 @@ def convert_npz_to_json(idx, list_npz_paths):
             "time": float(detections["time"]),
         }
         if "segmentation" in detections.keys():
-            result["segmentation"] = mask_to_rle(
-                force_binary_mask(detections["segmentation"][idx_det])
-            )
+            result["segmentation"] = mask_to_rle_pytorch(torch.tensor(detections["segmentation"][idx_det][None]) > 0)
         results.append(result)
 
         if "score_distribution" in detections.keys():

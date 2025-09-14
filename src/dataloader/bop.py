@@ -37,7 +37,8 @@ class BOPTemplate(Dataset):
             ]
             obj_ids = sorted(np.unique(obj_ids).tolist())
             logging.info(f"Found {obj_ids} objects in {self.template_dir}")
-        if "onboarding_static" in template_dir or "onboarding_dynamic" in template_dir:
+        if ("onboarding_static" in template_dir or "onboarding_dynamic" in template_dir
+                or "matchability_images" in template_dir):
             self.model_free_onboarding = True
         else:
             self.model_free_onboarding = False

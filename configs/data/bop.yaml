@@ -5,7 +5,7 @@ unzip_mode: unzip
 reference_dataloader:
   _target_: src.dataloader.bop.BOPTemplate
   obj_ids:
-  template_dir: ${machine.root_dir}/datasets/
+  template_dir: ${machine.root_dir}/
   level_templates: 0
   pose_distribution: all
   num_imgs_per_obj: 100
@@ -19,7 +19,7 @@ reference_dataloader:
 
 query_dataloader:
   _target_: src.dataloader.bop.BaseBOPTest
-  root_dir: /mnt/personal/jelint19/data/bop/
+  root_dir: ${machine.root_dir}/
   split:
   reset_metaData: True
   processing_config:

@@ -1,10 +1,15 @@
 import logging
+from pathlib import Path
 
 import pytorch_lightning as pl
 import torch
 import torchvision.transforms as T
+import numpy as np
 
-from src.model.utils import BatchedData
+from PIL import Image
+from torchvision.ops import masks_to_boxes
+
+from src.model.utils import BatchedData, Detections
 from src.utils.bbox_utils import CropResizePad, CustomResizeLongestSide
 
 descriptor_size = {
@@ -107,4 +112,16 @@ class CustomDINOv2(pl.LightningModule):
     @torch.no_grad()
     def forward(self, image_np, proposals):
         return self.forward_cls_token(image_np, proposals)
+
+    def get_detections_from_files(self, image_path: Path, segmentation_path: Path):
+        image = Image.open(image_path).convert('RGB')
+        image_tensor = torch.from_numpy(np.asarray(image)).to(self.device)
+        segmentation = Image.open(segmentation_path)
+        segmentation_mask = torch.from_numpy(np.array(segmentation)).unsqueeze(0).to(self.device)
+        segmentation_bbox = masks_to_boxes(segmentation_mask)
+        image_np = image_tensor.to(torch.uint8).numpy(force=True)
+        detections = Detections({'masks': segmentation_mask, 'boxes': segmentation_bbox})
+        dino_cls_descriptor, dino_dense_descriptor = self.forward(image_np, detections)
+
+        return dino_cls_descriptor, dino_dense_descriptor
 

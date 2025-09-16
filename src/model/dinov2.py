@@ -7,6 +7,9 @@ import torchvision.transforms as T
 import numpy as np
 
 from PIL import Image
+from hydra import initialize_config_dir, compose
+from hydra.core.global_hydra import GlobalHydra
+from hydra.utils import instantiate
 from torchvision.ops import masks_to_boxes
 
 from src.model.utils import BatchedData, Detections
@@ -125,3 +128,14 @@ class CustomDINOv2(pl.LightningModule):
 
         return dino_cls_descriptor, dino_dense_descriptor
 
+
+def descriptor_from_hydra(device='cuda') -> CustomDINOv2:
+    if GlobalHydra.instance().is_initialized():
+        GlobalHydra.instance().clear()
+    cfg_dir = (Path(__file__).parent.parent.parent / 'configs').resolve()
+    with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
+        cnos_cfg = compose(config_name="run_inference")
+
+    dino_descriptor: CustomDINOv2 = instantiate(cnos_cfg.model.descriptor_model).to(device)
+
+    return dino_descriptor

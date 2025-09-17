@@ -139,5 +139,6 @@ def descriptor_from_hydra(device='cuda') -> CustomDINOv2:
         cnos_cfg = compose(config_name="run_inference")
 
     dino_descriptor: CustomDINOv2 = instantiate(cnos_cfg.model.descriptor_model).to(device)
+    dino_descriptor.model.device = device
 
     return dino_descriptor

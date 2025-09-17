@@ -67,7 +67,7 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model_name: str, 
             detection_dict = {
                 "masks": masks_rle,
                 "descriptors": detections_cls_descriptors.numpy(force=True),
-                "patch_descriptors": detections_patch_desriptors.numpy(force=True),
+                # "patch_descriptors": detections_patch_desriptors.numpy(force=True),
                 "detection_time": detections_time,
                 "description_time": description_time,
             }

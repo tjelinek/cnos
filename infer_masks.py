@@ -91,7 +91,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--dataset",
-        choices=["lmo", "tless", "tudl", "icbin", "itodd", "hb_kinect", "hb_primesense", "ycbv", "handal"],
+        choices=["lmo", "tless", "tudl", "icbin", "itodd", "hb_kinect", "hb_primesense", "ycbv", "handal", "hope"],
         help="Dataset shortcut to run on. If not provided, runs on all datasets."
     )
     args = parser.parse_args()

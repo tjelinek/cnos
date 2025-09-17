@@ -1,30 +1,25 @@
-from typing import Any, Dict, Tuple, Optional
-
-import torch
-import torchvision.transforms as T
-from tqdm import tqdm
-import numpy as np
+import glob
 import logging
 import os
 import os.path as osp
+import time
+from typing import Any, Dict, Tuple, Optional
+
+import numpy as np
 import pytorch_lightning as pl
-import torch.nn.functional as F
+import torch
+import torchvision.transforms as T
+from tqdm import tqdm
 
 from src.model.loss import PairwiseSimilarity
-from src.utils.inout import save_json_bop23
 from src.model.utils import BatchedData, Detections, convert_npz_to_json
-import time
-import glob
-from functools import partial
-import multiprocessing
+from src.utils.inout import save_json_bop23
 
 
-def compute_templates_similarity_scores(db_descriptors: Dict[Any, Tuple[torch.Tensor, torch.Tensor]],
-                                        db_segmentations: torch.Tensor, proposal_cls_descriptors: torch.Tensor,
-                                        proposal_dense_descriptors: torch.Tensor, proposal_masks: torch.Tensor,
+def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
+                                        proposal_cls_descriptors: torch.Tensor,
                                         similarity_function: PairwiseSimilarity, aggregation_function: str,
-                                        matching_confidence_thresh: float, matching_max_num_instances: int,
-                                        patch_descriptor_similarity: bool = False) -> \
+                                        matching_confidence_thresh: float, matching_max_num_instances: int) -> \
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
 
     sorted_db_keys = sorted(db_descriptors.keys())

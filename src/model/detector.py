@@ -22,24 +22,11 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
                                         matching_confidence_thresh: float, matching_max_num_instances: int) -> \
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
 
-    sorted_db_keys = sorted(db_descriptors.keys())
 
     similarities = {k: similarity_function(proposal_cls_descriptors, db_descriptors[k][0].unsqueeze(1)).squeeze()
                     for k in sorted_db_keys}  # N_proposals x N_objects x N_templates
+    sorted_obj_keys = sorted(db_descriptors.keys())
 
-    if patch_descriptor_similarity:
-        proposal_dense_descriptors = F.interpolate(
-            proposal_dense_descriptors.permute(0, 3, 1, 2), size=tuple(proposal_masks.shape[-2:]), mode='bilinear',
-            align_corners=False
-        ).permute(0, 2, 3, 1)
-
-        db_dense_descriptors = {
-            F.interpolate(
-                db_descriptors[k][1].permute(0, 3, 1, 2), size=tuple(db_segmentations.shape[-2:]), mode='bilinear',
-                align_corners=False
-            ).permute(0, 2, 3, 1)
-            for k in sorted_db_keys
-        }
 
     per_obj_proposal_topk_templates = {}
     aggregated_similarities = {}
@@ -61,14 +48,14 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
 
         aggregated_similarities[obj_id] = score_per_proposal
 
-    score_per_proposal_and_object = torch.stack([aggregated_similarities[k] for k in sorted_db_keys], dim=-1)
+    score_per_proposal_and_object = torch.stack([aggregated_similarities[k] for k in sorted_obj_keys], dim=-1)
 
     # assign each proposal to the object with the highest scores
     idx_selected_proposals, pred_idx_objects, pred_score_distribution, pred_scores = \
         select_top_matching_proposals(score_per_proposal_and_object, matching_confidence_thresh,
                                       matching_max_num_instances)
 
-    sorted_db_keys_tensor = torch.tensor(sorted_db_keys).to(pred_idx_objects.device)
+    sorted_db_keys_tensor = torch.tensor(sorted_obj_keys).to(pred_idx_objects.device)
     selected_objects = sorted_db_keys_tensor[pred_idx_objects]
 
     top5_template_id_per_detection = []

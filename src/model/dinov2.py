@@ -119,8 +119,10 @@ class CustomDINOv2(pl.LightningModule):
     def get_detections_from_files(self, image_path: Path, segmentation_path: Path, black_background: bool = False):
         image = Image.open(image_path).convert('RGB')
         image_tensor = torch.from_numpy(np.asarray(image)).to(self.device)
-        segmentation = Image.open(segmentation_path)
-        segmentation_mask = torch.from_numpy(np.array(segmentation)).unsqueeze(0).to(self.device)
+        segmentation = Image.open(segmentation_path).convert('L')
+        segmentation_np = np.array(segmentation)
+        segmentation_mask = torch.from_numpy(segmentation_np).unsqueeze(0).to(self.device)
+        segmentation_mask = segmentation_mask.to(torch.float32).clamp(0, 1)  # From 0-255 to binary
         segmentation_bbox = masks_to_boxes(segmentation_mask)
         if black_background:
             image_tensor *= segmentation_mask.squeeze().unsqueeze(-1)

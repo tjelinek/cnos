@@ -116,7 +116,7 @@ class CustomDINOv2(pl.LightningModule):
     def forward(self, image_np, proposals):
         return self.forward_cls_token(image_np, proposals)
 
-    def get_detections_from_files(self, image_path: Path, segmentation_path: Path, black_background: bool = True):
+    def get_detections_from_files(self, image_path: Path, segmentation_path: Path, black_background: bool = False):
         image = Image.open(image_path).convert('RGB')
         image_tensor = torch.from_numpy(np.asarray(image)).to(self.device)
         segmentation = Image.open(segmentation_path)

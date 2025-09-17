@@ -22,11 +22,13 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
                                         matching_confidence_thresh: float, matching_max_num_instances: int) -> \
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
 
-
-    similarities = {k: similarity_function(proposal_cls_descriptors, db_descriptors[k][0].unsqueeze(1)).squeeze()
-                    for k in sorted_db_keys}  # N_proposals x N_objects x N_templates
     sorted_obj_keys = sorted(db_descriptors.keys())
 
+    similarities = {}
+    for obj_id in sorted_obj_keys:
+        obj_descriptor = db_descriptors[obj_id].unsqueeze(1)
+        similarity = similarity_function(proposal_cls_descriptors, obj_descriptor)
+        similarities[obj_id] = similarity.squeeze(-1)
 
     per_obj_proposal_topk_templates = {}
     aggregated_similarities = {}

@@ -116,12 +116,14 @@ class CustomDINOv2(pl.LightningModule):
     def forward(self, image_np, proposals):
         return self.forward_cls_token(image_np, proposals)
 
-    def get_detections_from_files(self, image_path: Path, segmentation_path: Path):
+    def get_detections_from_files(self, image_path: Path, segmentation_path: Path, black_background: bool = True):
         image = Image.open(image_path).convert('RGB')
         image_tensor = torch.from_numpy(np.asarray(image)).to(self.device)
         segmentation = Image.open(segmentation_path)
         segmentation_mask = torch.from_numpy(np.array(segmentation)).unsqueeze(0).to(self.device)
         segmentation_bbox = masks_to_boxes(segmentation_mask)
+        if black_background:
+            image_tensor *= segmentation_mask.squeeze().unsqueeze(-1)
         image_np = image_tensor.to(torch.uint8).numpy(force=True)
         detections = Detections({'masks': segmentation_mask, 'boxes': segmentation_bbox})
         dino_cls_descriptor, dino_dense_descriptor = self.forward(image_np, detections)

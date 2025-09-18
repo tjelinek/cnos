@@ -56,13 +56,17 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
         select_top_matching_proposals(score_per_proposal_and_object, matching_confidence_thresh,
                                       matching_max_num_instances)
 
-    for obj_id in sorted_obj_keys:
-        similarities[obj_id] = similarities[obj_id][idx_selected_proposals]
+    filter_similarities_dict(similarities, idx_selected_proposals)
 
     sorted_db_keys_tensor = torch.tensor(sorted_obj_keys).to(pred_idx_objects.device)
     selected_objects = sorted_db_keys_tensor[pred_idx_objects]
 
     return idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, similarities
+
+
+def filter_similarities_dict(similarities, idx_selected_proposals):
+    for obj_id in similarities.keys():
+        similarities[obj_id] = similarities[obj_id][idx_selected_proposals]
 
 
 def select_top_matching_proposals(score_per_proposal_and_object: torch.Tensor, matching_confidence_thresh: float,

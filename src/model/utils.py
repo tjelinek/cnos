@@ -121,6 +121,34 @@ class Detections:
         for key in self.keys:
             setattr(self, key, getattr(self, key)[keep_idxs])
 
+    def apply_nms_for_masks_inside_masks(self):
+        all_masks = self.masks
+        keep_detections = torch.ones(len(all_masks), dtype=torch.bool, device=self.boxes.device)
+
+        for i in range(len(all_masks)):
+            current_mask = all_masks[i:i + 1]  # Keep batch dimension
+            current_mask_intersection = current_mask & all_masks
+
+            # Compute IoU between current mask and all masks
+            intersection = (current_mask & current_mask_intersection).sum(dim=(1, 2))
+            union = (current_mask | current_mask_intersection).sum(dim=(1, 2))
+            ious = intersection.float() / union.float()
+
+            # Find masks with high overlap (>90% IoU)
+            high_overlap_masks = ious > 0.9
+            high_overlap_masks[i] = False  # Exclude self-comparison
+
+            # Find which of these overlapping masks have lower scores
+            lower_score_masks = self.scores < self.scores[i]
+            masks_to_suppress = high_overlap_masks & lower_score_masks
+
+            # Keep detections that are NOT suppressed by current mask
+            keep_detections &= ~masks_to_suppress
+
+        keep_detections_indices = torch.nonzero(keep_detections).squeeze(1)
+        for key in self.keys:
+            setattr(self, key, getattr(self, key)[keep_detections_indices])
+
     def apply_nms(self, nms_thresh=0.5):
         keep_idx = torchvision.ops.nms(
             self.boxes.float(), self.scores.float(), nms_thresh

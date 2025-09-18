@@ -3,10 +3,10 @@ import logging
 import numpy as np
 import torch
 import torchvision
-from segment_anything.utils.amg import mask_to_rle_pytorch
 from torchvision.ops.boxes import box_area
 
-from src.utils.bbox_utils import xyxy_to_xywh, xywh_to_xyxy, force_binary_mask
+from segment_anything.utils.amg import mask_to_rle_pytorch
+from src.utils.bbox_utils import xyxy_to_xywh, xywh_to_xyxy
 from src.utils.inout import save_npz
 
 lmo_object_ids = np.array(
@@ -63,7 +63,7 @@ class BatchedData:
 
     def __getitem__(self, idx):
         assert self.batch_size is not None, "batch_size is not defined"
-        return self.data[idx * self.batch_size : (idx + 1) * self.batch_size]
+        return self.data[idx * self.batch_size: (idx + 1) * self.batch_size]
 
     def cat(self, data, dim=0):
         if len(self.data) == 0:
@@ -99,7 +99,7 @@ class Detections:
         box_areas = box_area(self.boxes) / img_area
         mask_areas = self.masks.sum(dim=(1, 2)) / img_area
         keep_idxs = torch.logical_and(
-            box_areas > config.min_box_size**2, mask_areas > config.min_mask_size
+            box_areas > config.min_box_size ** 2, mask_areas > config.min_mask_size
         )
         # logging.info(f"Removing {len(keep_idxs) - keep_idxs.sum()} detections")
         for key in self.keys:
@@ -109,10 +109,14 @@ class Detections:
         keep_idxs = BatchedData(None)
         all_indexes = torch.arange(len(self.object_ids), device=self.boxes.device)
         for object_id in torch.unique(self.object_ids):
-            idx = self.object_ids == object_id
-            idx_object_id = all_indexes[idx]
-            keep_idx = torchvision.ops.nms(self.boxes[idx].float(), self.scores[idx].float(), nms_thresh)
-            keep_idxs.cat(idx_object_id[keep_idx])
+            this_object_detections_mask = self.object_ids == object_id
+
+            this_object_detections_indices = all_indexes[this_object_detections_mask]
+
+            this_obj_keep_indices = torchvision.ops.nms(self.boxes[this_object_detections_mask].float(),
+                                                        self.scores[this_object_detections_mask].float(), nms_thresh)
+
+            keep_idxs.cat(this_object_detections_indices[this_obj_keep_indices])
         keep_idxs = keep_idxs.data
         for key in self.keys:
             setattr(self, key, getattr(self, key)[keep_idxs])
@@ -137,7 +141,7 @@ class Detections:
         score_size = len(self.scores)
         object_id_size = len(self.object_ids)
         assert (
-            mask_size == box_size == score_size == object_id_size
+                mask_size == box_size == score_size == object_id_size
         ), f"Size mismatch {mask_size} {box_size} {score_size} {object_id_size}"
 
     def to_numpy(self):
@@ -150,7 +154,8 @@ class Detections:
             setattr(self, key, torch.from_numpy(getattr(self, key)))
 
     def save_to_file(
-        self, scene_id, frame_id, runtime, file_path, dataset_name, return_results=False, save_mask=True, save_score_distribution=False
+            self, scene_id, frame_id, runtime, file_path, dataset_name, return_results=False, save_mask=True,
+            save_score_distribution=False
     ):
         """
         scene_id, image_id, category_id, bbox, time

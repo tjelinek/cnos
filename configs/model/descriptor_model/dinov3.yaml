@@ -5,10 +5,12 @@ model_name: dinov3_vitl16
 model_type: dinov3
 model: 
   _target_: torch.hub.load
-  repo_or_dir: facebookresearch/dinov2  # Update this path
+  repo_or_dir: /home/jelint19/repositories/dinov3
   model: ${model.descriptor_model.model_name}
   source: local
-  weights: /mnt/personal/jelint19/weights/DINOv3/dinov3_vitl16.pth  # Update this path
+  pretrained: False
+  # Don't pass weights here - handled manually in descriptor_from_hydra()
+weights: /mnt/personal/jelint19/weights/DINOv3/dinov3_vitl16.pth  # Used by custom loading logic
 token_name: x_norm_clstoken
 descriptor_width_size: ${model.descriptor_width_size}
 image_size: 224

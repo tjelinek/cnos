@@ -169,14 +169,47 @@ class CustomDINOv2(pl.LightningModule):
         return dino_cls_descriptor, dino_dense_descriptor
 
 
-def descriptor_from_hydra(device='cuda') -> CustomDINOv2:
+def descriptor_from_hydra(device='cuda', model='dinov3') -> CustomDINOv2:
     if GlobalHydra.instance().is_initialized():
         GlobalHydra.instance().clear()
     cfg_dir = (Path(__file__).parent.parent.parent / 'configs').resolve()
     with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
-        cnos_cfg = compose(config_name="run_inference")
+        cnos_cfg = compose(config_name="run_inference", overrides=[f'model/descriptor_model={model}'])
 
-    dino_descriptor: CustomDINOv2 = instantiate(cnos_cfg.model.descriptor_model).to(device)
+    model_cfg = cnos_cfg.model.descriptor_model
+
+    if _is_dinov3_with_local_weights(model_cfg):
+        return _load_dinov3_with_local_weights(model_cfg, device)
+    else:
+        # Standard loading for DINOv2 or DINOv3 with URLs
+        dino_descriptor: CustomDINOv2 = instantiate(model_cfg).to(device)
+        dino_descriptor.model.device = device
+        return dino_descriptor
+
+
+def _is_dinov3_with_local_weights(model_cfg) -> bool:
+    """Check if this is DINOv3 with local .pth file."""
+    return (
+            model_cfg.get('model_type') == 'dinov3' and
+            'weights' in model_cfg and
+            model_cfg.weights.endswith('.pth')
+    )
+
+
+def _load_dinov3_with_local_weights(model_cfg, device):
+    """Load DINOv3: first load model without weights, then load state dict."""
+    weights_path = model_cfg.weights
+    logging.info(f"Loading DINOv3 with local weights: {weights_path}")
+
+    # Remove weights from config and load model
+    import copy
+    cfg_no_weights = copy.deepcopy(model_cfg)
+    del cfg_no_weights.weights
+    dino_descriptor: CustomDINOv2 = instantiate(cfg_no_weights).to(device)
+
+    # Load weights manually
+    state_dict = torch.load(weights_path, map_location=device)
+    dino_descriptor.model.load_state_dict(state_dict, strict=True)
     dino_descriptor.model.device = device
 
     return dino_descriptor

@@ -1,0 +1,19 @@
+# configs/model/descriptor_model/dinov3_vitl16_satellite.yaml
+# For satellite imagery (SAT-493M pretrained weights)
+_target_: src.model.dinov2.CustomDINOv2
+model_name: dinov3_vitl16
+model_type: dinov3
+model: 
+  _target_: torch.hub.load
+  repo_or_dir: facebookresearch/dinov2  # Update this path
+  model: ${model.descriptor_model.model_name}
+  source: local
+  weights: /mnt/personal/jelint19/weights/DINOv3/dinov3_vitl16.pth  # Update this path
+token_name: x_norm_clstoken
+descriptor_width_size: ${model.descriptor_width_size}
+image_size: 224
+chunk_size: 16
+patch_size: 16
+normalization:
+  mean: [0.430, 0.411, 0.296]  # SAT-493M (satellite images)
+  std: [0.213, 0.156, 0.143]

@@ -16,51 +16,87 @@ from src.model.utils import BatchedData, Detections
 from src.utils.bbox_utils import CropResizePad, CustomResizeLongestSide
 
 descriptor_size = {
+    # DINOv2 models
     "dinov2_vits14": 384,
     "dinov2_vitb14": 768,
     "dinov2_vitl14": 1024,
     "dinov2_vitg14": 1536,
+    # DINOv3 ViT models (web images - LVD-1689M)
+    "dinov3_vits16": 384,
+    "dinov3_vits16plus": 384,
+    "dinov3_vitb16": 768,
+    "dinov3_vitl16": 1024,
+    "dinov3_vith16plus": 1280,
+    "dinov3_vit7b16": 1536,
+    # DINOv3 ConvNeXt models
+    "dinov3_convnext_tiny": 768,
+    "dinov3_convnext_small": 768,
+    "dinov3_convnext_base": 1024,
+    "dinov3_convnext_large": 1536,
 }
 
 
 class CustomDINOv2(pl.LightningModule):
     def __init__(
-        self,
-        model_name,
-        model,
-        token_name,
-        image_size,
-        chunk_size,
-        descriptor_width_size,
-        patch_size=14,
+            self,
+            model_name,
+            model,
+            token_name,
+            image_size,
+            chunk_size,
+            descriptor_width_size,
+            patch_size=14,
+            model_type="dinov2",
+            normalization=None,
     ):
         super().__init__()
         self.model_name = model_name
         self.model = model
         self.token_name = token_name
         self.chunk_size = chunk_size
-        self.patch_size = patch_size
+        self.model_type = model_type
+
+        # Determine patch size based on model type
+        if model_type == "dinov3":
+            self.patch_size = 16 if "16" in model_name else 14
+        else:
+            self.patch_size = patch_size
+
         self.proposal_size = image_size
         self.descriptor_width_size = descriptor_width_size
-        logging.info(f"Init CustomDINOv2 done!")
+
+        logging.info(f"Init CustomDINOv2 wrapper for {model_type} model: {model_name}")
+
+        # Setup normalization parameters
+        if normalization is None:
+            # Default normalization (ImageNet/LVD-1689M for web images)
+            norm_mean = (0.485, 0.456, 0.406)
+            norm_std = (0.229, 0.224, 0.225)
+        else:
+            norm_mean = tuple(normalization.get("mean", [0.485, 0.456, 0.406]))
+            norm_std = tuple(normalization.get("std", [0.229, 0.224, 0.225]))
+
         self.rgb_normalize = T.Compose(
             [
                 T.ToTensor(),
-                T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+                T.Normalize(mean=norm_mean, std=norm_std),
             ]
         )
+
         # use for global feature
         self.rgb_proposal_processor = CropResizePad(self.proposal_size)
         self.rgb_resize = CustomResizeLongestSide(
             descriptor_width_size, dividable_size=self.patch_size
         )
+
         logging.info(
-            f"Init CustomDINOv2 with full size={descriptor_width_size} and proposal size={self.proposal_size} done!"
+            f"Init {model_type} wrapper with full size={descriptor_width_size}, "
+            f"proposal size={self.proposal_size}, patch size={self.patch_size} done!"
         )
 
     def process_rgb_proposals(self, image_np, masks, boxes):
         """
-        1. Normalize image with DINOv2 transfom
+        1. Normalize image with DINOv2/DINOv3 transform
         2. Mask and crop each proposals
         3. Resize each proposals to predefined longest image size
         """
@@ -103,7 +139,6 @@ class CustomDINOv2(pl.LightningModule):
             spatial_patch_features.cat(spatial_patch_feats)
 
         return cls_features.data, spatial_patch_features.data
-
 
     @torch.no_grad()
     def forward_cls_token(self, image_np, proposals):

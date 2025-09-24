@@ -121,6 +121,8 @@ class Detections:
         for key in self.keys:
             setattr(self, key, getattr(self, key)[keep_idxs])
 
+        return keep_idxs
+
     def apply_nms_for_masks_inside_masks(self):
         all_masks = self.masks
         keep_detections = torch.ones(len(all_masks), dtype=torch.bool, device=self.boxes.device)
@@ -148,6 +150,8 @@ class Detections:
         keep_detections_indices = torch.nonzero(keep_detections).squeeze(1)
         for key in self.keys:
             setattr(self, key, getattr(self, key)[keep_detections_indices])
+
+        return keep_detections_indices
 
     def apply_nms(self, nms_thresh=0.5):
         keep_idx = torchvision.ops.nms(

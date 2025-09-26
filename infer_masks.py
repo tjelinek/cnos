@@ -114,6 +114,8 @@ if __name__ == "__main__":
         "ycbv": bop_path / 'ycbv' / 'test',
         "handal": bop_path / 'handal' / 'test',
         "hope": bop_path / 'hope' / 'test',
+        "handal-val": bop_path / 'handal' / 'val',
+        "hope-val": bop_path / 'hope' / 'val',
     }
 
     if args.dataset:

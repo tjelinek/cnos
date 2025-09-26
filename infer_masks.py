@@ -18,12 +18,16 @@ from tqdm import tqdm
 
 from utils.image_utils import overlay_mask
 from repositories.cnos.src.model.detector import CNOS
+from repositories.cnos.src.model.dinov2 import descriptor_from_hydra
 
 
-def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model_name: str, recompute):
+def infer_masks_for_folder(folder: Path, base_cache_folder: Path, cfg: DictConfig, cnos_model_name: str):
     cnos_model: CNOS = instantiate(cfg.model).to('cuda')
     cnos_model.move_to_device()
     folder = folder.resolve()
+
+    descriptor_dinov2 = descriptor_from_hydra('dinov2')
+    descriptor_dinov3 = descriptor_from_hydra('dinov3')
 
     all_sequences = sorted(folder.iterdir())
     for sequence in tqdm(all_sequences, desc=f"[{folder}] Sequences", total=len(all_sequences)):
@@ -34,19 +38,29 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model_name: str, 
             continue
 
         segment_model_name = 'fastsam' if cnos_model_name == 'cnos_fast' else 'sam'
-        proposals_dir = sequence / f"cnos_{segment_model_name}_detections"
-        visual_dir = sequence / f"cnos_{segment_model_name}_visual"
-        proposals_dir.mkdir(parents=True, exist_ok=True)
-        visual_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create directories for both DINOv2 and DINOv3
+        cache_sequence_dir = base_cache_folder / folder.parent.name / folder.name / sequence.name
+        proposals_dir_dinov2 = cache_sequence_dir / f"cnos_{segment_model_name}_detections_dinov2"
+        detections_visual_dir = cache_sequence_dir / f"cnos_{segment_model_name}_visual"
+        proposals_dir_dinov3 = cache_sequence_dir / f"cnos_{segment_model_name}_detections_dinov3"
+
+        proposals_dir_dinov2.mkdir(parents=True, exist_ok=True)
+        detections_visual_dir.mkdir(parents=True, exist_ok=True)
+        proposals_dir_dinov3.mkdir(parents=True, exist_ok=True)
 
         all_images = sorted(image_folder.iterdir())
         for img_idx, img_path in tqdm(enumerate(all_images), total=len(all_images),
                                       leave=False, desc=f"Images in {sequence.name}"):
             img_name = img_path.stem
 
-            pickle_path = Path(f"{proposals_dir}/{img_name}.pkl")
-            if pickle_path.exists():
+            pickle_path_dinov2 = Path(f"{proposals_dir_dinov2}/{img_name}.pkl")
+            pickle_path_dinov3 = Path(f"{proposals_dir_dinov3}/{img_name}.pkl")
+
+            # Skip if both files already exist
+            if pickle_path_dinov2.exists() and pickle_path_dinov3.exists():
                 continue
+
             img = np.array(Image.open(img_path).convert("RGB"))
             start_time = time()
             torch.cuda.synchronize()
@@ -55,34 +69,39 @@ def infer_masks_for_folder(folder: Path, cfg: DictConfig, cnos_model_name: str, 
             detections_time = time() - start_time
 
             masks = detections.masks
-
-            start_time = time()
-            torch.cuda.synchronize()
-            detections_cls_descriptors, detections_patch_desriptors = cnos_model.descriptor_model(img, detections)
-            torch.cuda.synchronize()
-            description_time = time() - start_time
-
             masks_rle = mask_to_rle_pytorch((masks > 0).to(torch.long))
 
-            detection_dict = {
-                "masks": masks_rle,
-                "descriptors": detections_cls_descriptors.numpy(force=True),
-                # "patch_descriptors": detections_patch_desriptors.numpy(force=True),
-                "detection_time": detections_time,
-                "description_time": description_time,
-            }
+            # Process both DINOv2 and DINOv3 descriptors
+            for descriptor_func, pickle_path in [(descriptor_dinov2, pickle_path_dinov2),
+                                                 (descriptor_dinov3, pickle_path_dinov3)]:
+                if not pickle_path.exists():
+                    start_time = time()
+                    torch.cuda.synchronize()
+                    detections_cls_descriptors, detections_patch_descriptors = descriptor_func(img, detections)
+                    torch.cuda.synchronize()
+                    description_time = time() - start_time
 
-            with open(pickle_path, "wb") as pickle_file:
-                pickle.dump(detection_dict, pickle_file)
+                    detection_dict = {
+                        "masks": masks_rle,
+                        "descriptors": detections_cls_descriptors.numpy(force=True),
+                        # "patch_descriptors": detections_patch_descriptors.numpy(force=True),
+                        "detection_time": detections_time,
+                        "description_time": description_time,
+                    }
 
+                    with open(pickle_path, "wb") as pickle_file:
+                        pickle.dump(detection_dict, pickle_file)
+
+            # Save visualizations (only for DINOv2 to avoid duplication since masks are the same)
             all_images_div_10 = len(all_images) // 10
             all_images_div_10 = round(all_images_div_10, -1)
             if img_idx % max(10, all_images_div_10) == 0:
                 for i, m in enumerate(masks):
                     mask_uint8 = (m.numpy(force=True).astype(np.uint8) * 255)
                     vis = overlay_mask(img, m.numpy(force=True).astype(np.float32))
-                    # cv2.imwrite(str(proposals_dir / f"{img_name}_{i:06d}.png"), mask_uint8)
-                    cv2.imwrite(str(visual_dir / f"{img_name}_{i:06d}.jpg"), cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
+                    # cv2.imwrite(str(proposals_dir_dinov2 / f"{img_name}_{i:06d}.png"), mask_uint8)
+                    cv2.imwrite(str(detections_visual_dir / f"{img_name}_{i:06d}.jpg"),
+                                cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
 
 
 if __name__ == "__main__":
@@ -91,7 +110,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--dataset",
-        choices=["lmo", "tless", "tudl", "icbin", "itodd", "hb_kinect", "hb_primesense", "ycbv", "handal", "hope"],
         help="Dataset shortcut to run on. If not provided, runs on all datasets."
     )
     args = parser.parse_args()
@@ -123,5 +141,6 @@ if __name__ == "__main__":
     else:
         targets = list(folders.values())
 
+    base_cache_path = Path('/mnt/personal/jelint19/cache/detections_cache/')
     for folder_path in tqdm(targets, desc="Datasets"):
-        infer_masks_for_folder(folder_path, cfg, model, True)
+        infer_masks_for_folder(folder_path, base_cache_path, cfg, model)

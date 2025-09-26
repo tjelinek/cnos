@@ -21,7 +21,8 @@ from repositories.cnos.src.model.detector import CNOS
 from repositories.cnos.src.model.dinov2 import descriptor_from_hydra
 
 
-def infer_masks_for_folder(folder: Path, base_cache_folder: Path, cfg: DictConfig, cnos_model_name: str):
+def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, split: str, cfg: DictConfig,
+                           cnos_model_name: str):
     cnos_model: CNOS = instantiate(cfg.model).to('cuda')
     cnos_model.move_to_device()
     folder = folder.resolve()
@@ -40,7 +41,7 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, cfg: DictConfi
         segment_model_name = 'fastsam' if cnos_model_name == 'cnos_fast' else 'sam'
 
         # Create directories for both DINOv2 and DINOv3
-        cache_sequence_dir = base_cache_folder / folder.parent.name / folder.name / sequence.name
+        cache_sequence_dir = base_cache_folder / dataset / split / sequence.name
         proposals_dir_dinov2 = cache_sequence_dir / f"cnos_{segment_model_name}_detections_dinov2"
         detections_visual_dir = cache_sequence_dir / f"cnos_{segment_model_name}_visual"
         proposals_dir_dinov3 = cache_sequence_dir / f"cnos_{segment_model_name}_detections_dinov3"
@@ -104,7 +105,7 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, cfg: DictConfi
                                 cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
 
 
-if __name__ == "__main__":
+def main():
     model = 'cnos'
 
     parser = argparse.ArgumentParser()
@@ -137,10 +138,18 @@ if __name__ == "__main__":
     }
 
     if args.dataset:
-        targets = [folders[args.dataset]]
+        targets = [(args.dataset, folders[args.dataset])]
     else:
-        targets = list(folders.values())
+        targets = list(folders.items())
 
     base_cache_path = Path('/mnt/personal/jelint19/cache/detections_cache/')
-    for folder_path in tqdm(targets, desc="Datasets"):
-        infer_masks_for_folder(folder_path, base_cache_path, cfg, model)
+    for dataset_name, folder_path in tqdm(targets, desc="Datasets"):
+
+        split = folder_path.name
+        dataset = folder_path.parent.nae
+
+        infer_masks_for_folder(folder_path, base_cache_path, dataset, split, cfg, model)
+
+
+if __name__ == "__main__":
+    main()

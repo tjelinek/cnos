@@ -146,7 +146,7 @@ def main():
     for dataset_name, folder_path in tqdm(targets, desc="Datasets"):
 
         split = folder_path.name
-        dataset = folder_path.parent.nae
+        dataset = folder_path.parent.name
 
         infer_masks_for_folder(folder_path, base_cache_path, dataset, split, cfg, model)
 

@@ -5,12 +5,19 @@ from segment_anything import (
 )
 from segment_anything.modeling import Sam
 from segment_anything.utils.amg import MaskData, generate_crop_boxes, rle_to_mask
+
+# SAM 2 imports
+from sam2.build_sam import build_sam2
+from sam2.sam2_image_predictor import SAM2ImagePredictor
+from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+
 import logging
 import numpy as np
 import torch
 from torchvision.ops.boxes import batched_nms, box_area  # type: ignore
 import os.path as osp
-from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 import cv2
 import torch.nn.functional as F
 
@@ -26,7 +33,81 @@ def load_sam(model_type, checkpoint_dir):
     sam = sam_model_registry[model_type](
         checkpoint=osp.join(checkpoint_dir, pretrained_weight_dict[model_type])
     )
+    sam._is_sam2 = False  # Mark as SAM1
     return sam
+
+
+def load_sam2(
+        model_type: str,
+        checkpoint_dir: Union[str, Path],
+        config_dir: Optional[Union[str, Path]] = None,
+        checkpoint_file: Optional[str] = None,
+        config_file: Optional[str] = None,
+        device: str = "cuda",
+        **kwargs
+) -> torch.nn.Module:
+
+    """Load SAM 2 model."""
+    checkpoint_dir = Path(checkpoint_dir)
+
+    # Default config directory
+    if config_dir is None:
+        config_dir = checkpoint_dir / "sam2_configs"
+    else:
+        config_dir = Path(config_dir)
+
+    # Auto-resolve checkpoint and config files
+    if checkpoint_file is None or config_file is None:
+        auto_checkpoint, auto_config = _resolve_sam2_files(model_type)
+        if checkpoint_file is None:
+            checkpoint_file = auto_checkpoint
+        if config_file is None:
+            config_file = auto_config
+
+    checkpoint_path = checkpoint_dir / checkpoint_file
+    config_path = config_dir / config_file
+
+    # Verify files exist
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(f"SAM 2 checkpoint not found: {checkpoint_path}")
+    if not config_path.exists():
+        raise FileNotFoundError(f"SAM 2 config not found: {config_path}")
+
+    logging.info(f"Loading SAM 2 model from {checkpoint_path}")
+    sam2 = build_sam2(str(config_path), str(checkpoint_path), device=device)
+    sam2._is_sam2 = True  # Mark as SAM2
+
+    return sam2
+
+
+def _resolve_sam2_files(model_type: str) -> tuple[str, str]:
+    """Resolve SAM2 checkpoint and config file names from model type."""
+    sam2_files = {
+        'sam2.1_hiera_tiny': ('sam2.1_hiera_tiny.pt', 'sam2.1_hiera_t.yaml'),
+        'sam2.1_hiera_small': ('sam2.1_hiera_small.pt', 'sam2.1_hiera_s.yaml'),
+        'sam2.1_hiera_base_plus': ('sam2.1_hiera_base_plus.pt', 'sam2.1_hiera_b+.yaml'),
+        'sam2.1_hiera_large': ('sam2.1_hiera_large.pt', 'sam2.1_hiera_l.yaml'),
+        'sam2_hiera_tiny': ('sam2_hiera_tiny.pt', 'sam2_hiera_t.yaml'),
+        'sam2_hiera_small': ('sam2_hiera_small.pt', 'sam2_hiera_s.yaml'),
+        'sam2_hiera_base_plus': ('sam2_hiera_base_plus.pt', 'sam2_hiera_b+.yaml'),
+        'sam2_hiera_large': ('sam2_hiera_large.pt', 'sam2_hiera_l.yaml'),
+    }
+
+    if model_type in sam2_files:
+        return sam2_files[model_type]
+    else:
+        checkpoint_file = f"{model_type}.pt"
+        if 'tiny' in model_type:
+            config_file = f"{model_type.split('_')[0]}_hiera_t.yaml"
+        elif 'small' in model_type:
+            config_file = f"{model_type.split('_')[0]}_hiera_s.yaml"
+        elif 'base' in model_type:
+            config_file = f"{model_type.split('_')[0]}_hiera_b+.yaml"
+        elif 'large' in model_type:
+            config_file = f"{model_type.split('_')[0]}_hiera_l.yaml"
+        else:
+            config_file = f"{model_type}.yaml"
+        return checkpoint_file, config_file
 
 
 def load_sam_predictor(model_type, checkpoint_dir, device):
@@ -51,26 +132,51 @@ def load_sam_mask_generator(model_type, checkpoint_dir, device):
 
 class CustomSamAutomaticMaskGenerator(SamAutomaticMaskGenerator):
     def __init__(
-        self,
-        sam: Sam,
-        min_mask_region_area: int = 0,
-        points_per_batch: int = 64,
-        stability_score_thresh: float = 0.95,
-        box_nms_thresh: float = 0.7,
-        crop_overlap_ratio: float = 512 / 1500,
-        segmentor_width_size=None,
-    ):
-        SamAutomaticMaskGenerator.__init__(
             self,
-            sam,
-            min_mask_region_area=min_mask_region_area,
-            points_per_batch=points_per_batch,
-            stability_score_thresh=stability_score_thresh,
-            box_nms_thresh=box_nms_thresh,
-            crop_overlap_ratio=crop_overlap_ratio,
-        )
+            sam: Sam,
+            min_mask_region_area: int = 0,
+            points_per_batch: int = 64,
+            stability_score_thresh: float = 0.95,
+            box_nms_thresh: float = 0.7,
+            crop_overlap_ratio: float = 512 / 1500,
+            segmentor_width_size=None,
+    ):
         self.segmentor_width_size = segmentor_width_size
-        logging.info(f"Init CustomSamAutomaticMaskGenerator done!")
+        self.is_sam2 = hasattr(sam, '_is_sam2') and sam._is_sam2
+
+        if self.is_sam2:
+            # SAM2 parameters mapping
+            sam2_params = {
+                'model': sam,
+                'points_per_batch': points_per_batch,
+                'pred_iou_thresh': stability_score_thresh,
+                'stability_score_thresh': stability_score_thresh,
+                'box_nms_thresh': box_nms_thresh,
+                'min_mask_region_area': min_mask_region_area,
+            }
+            if crop_overlap_ratio != 512 / 1500:  # only add if different from default
+                sam2_params['crop_overlap_ratio'] = crop_overlap_ratio
+
+            self._sam2_generator = SAM2AutomaticMaskGenerator(**sam2_params)
+            logging.info(f"Init CustomSamAutomaticMaskGenerator with SAM2 done!")
+        else:
+            SamAutomaticMaskGenerator.__init__(
+                self,
+                sam,
+                min_mask_region_area=min_mask_region_area,
+                points_per_batch=points_per_batch,
+                stability_score_thresh=stability_score_thresh,
+                box_nms_thresh=box_nms_thresh,
+                crop_overlap_ratio=crop_overlap_ratio,
+            )
+            logging.info(f"Init CustomSamAutomaticMaskGenerator with SAM1 done!")
+
+    def generate(self, image: np.ndarray) -> List[Dict[str, Any]]:
+        """Generate masks - unified interface for SAM1 and SAM2."""
+        if self.is_sam2:
+            return self._sam2_generator.generate(image)
+        else:
+            return self.generate_masks(image)
 
     def preprocess_resize(self, image: np.ndarray):
         orig_size = image.shape[:2]

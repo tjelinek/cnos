@@ -10,7 +10,6 @@ sam:
   _target_: src.model.sam.load_sam2
   model_type: sam2.1_hiera_large  # or sam2.1_hiera_tiny, sam2.1_hiera_small, sam2.1_hiera_base_plus
   checkpoint_dir: /mnt/personal/jelint19/weights/SegmentAnything2/
-  config_dir: /mnt/personal/jelint19/weights/SegmentAnything2/sam2_configs/
   # Optional: specify exact checkpoint and config files
   checkpoint_file: sam2.1_hiera_large.pt  # will be auto-resolved if not specified
-  config_file: sam2.1_hiera_l.yaml  # will be auto-resolved if not specified
+  config_file: sam2.1/sam2.1_hiera_l.yaml  # will be auto-resolved if not specified

@@ -6,10 +6,6 @@ from segment_anything import (
 from segment_anything.modeling import Sam
 from segment_anything.utils.amg import MaskData, generate_crop_boxes, rle_to_mask
 
-# SAM 2 imports
-from sam2.build_sam import build_sam2
-from sam2.sam2_image_predictor import SAM2ImagePredictor
-from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
 import logging
 import numpy as np
@@ -40,21 +36,18 @@ def load_sam(model_type, checkpoint_dir):
 def load_sam2(
         model_type: str,
         checkpoint_dir: Union[str, Path],
-        config_dir: Optional[Union[str, Path]] = None,
         checkpoint_file: Optional[str] = None,
         config_file: Optional[str] = None,
         device: str = "cuda",
         **kwargs
 ) -> torch.nn.Module:
 
+    from hydra.core.global_hydra import GlobalHydra
+    import sam2
+    from sam2.build_sam import build_sam2
+
     """Load SAM 2 model."""
     checkpoint_dir = Path(checkpoint_dir)
-
-    # Default config directory
-    if config_dir is None:
-        config_dir = checkpoint_dir / "sam2_configs"
-    else:
-        config_dir = Path(config_dir)
 
     # Auto-resolve checkpoint and config files
     if checkpoint_file is None or config_file is None:
@@ -65,16 +58,19 @@ def load_sam2(
             config_file = auto_config
 
     checkpoint_path = checkpoint_dir / checkpoint_file
-    config_path = config_dir / config_file
 
     # Verify files exist
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"SAM 2 checkpoint not found: {checkpoint_path}")
-    if not config_path.exists():
-        raise FileNotFoundError(f"SAM 2 config not found: {config_path}")
 
     logging.info(f"Loading SAM 2 model from {checkpoint_path}")
-    sam2 = build_sam2(str(config_path), str(checkpoint_path), device=device)
+
+    cfg_dir = Path(sam2.__file__).parent / "configs"
+    if GlobalHydra.instance().is_initialized():
+        GlobalHydra.instance().clear()
+    from hydra import initialize_config_dir
+    with initialize_config_dir(config_dir=str(cfg_dir.resolve()), version_base=None, job_name="sam2"):
+        sam2 = build_sam2(config_file, str(checkpoint_path), device=device)
     sam2._is_sam2 = True  # Mark as SAM2
 
     return sam2
@@ -157,6 +153,7 @@ class CustomSamAutomaticMaskGenerator(SamAutomaticMaskGenerator):
             if crop_overlap_ratio != 512 / 1500:  # only add if different from default
                 sam2_params['crop_overlap_ratio'] = crop_overlap_ratio
 
+            from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
             self._sam2_generator = SAM2AutomaticMaskGenerator(**sam2_params)
             logging.info(f"Init CustomSamAutomaticMaskGenerator with SAM2 done!")
         else:

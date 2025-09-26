@@ -151,7 +151,7 @@ class CustomDINOv2(pl.LightningModule):
     def forward(self, image_np, proposals):
         return self.forward_cls_token(image_np, proposals)
 
-    def get_detections_from_files(self, image_path: Path, segmentation_path: Path, black_background: bool = False):
+    def get_detections_from_files(self, image_path: Path, segmentation_path: Path):
         image = Image.open(image_path).convert('RGB')
         image_array = np.array(image)
         image_tensor = torch.from_numpy(image_array).to(self.device)
@@ -160,8 +160,6 @@ class CustomDINOv2(pl.LightningModule):
         segmentation_mask = torch.from_numpy(segmentation_np).unsqueeze(0).to(self.device)
         segmentation_mask = segmentation_mask.to(torch.float32).clamp(0, 1)  # From 0-255 to binary
         segmentation_bbox = masks_to_boxes(segmentation_mask)
-        if black_background:
-            image_tensor *= segmentation_mask.squeeze().unsqueeze(-1)
         image_np = image_tensor.to(torch.uint8).numpy(force=True)
         detections = Detections({'masks': segmentation_mask, 'boxes': segmentation_bbox})
         dino_cls_descriptor, dino_dense_descriptor = self.forward(image_np, detections)
@@ -169,7 +167,7 @@ class CustomDINOv2(pl.LightningModule):
         return dino_cls_descriptor, dino_dense_descriptor
 
 
-def descriptor_from_hydra(device='cuda', model='dinov3') -> CustomDINOv2:
+def descriptor_from_hydra(model='dinov3', device='cuda') -> CustomDINOv2:
     if GlobalHydra.instance().is_initialized():
         GlobalHydra.instance().clear()
     cfg_dir = (Path(__file__).parent.parent.parent / 'configs').resolve()

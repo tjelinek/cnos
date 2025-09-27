@@ -1,5 +1,6 @@
 import argparse
 import pickle
+import shutil
 import sys
 from pathlib import Path
 from time import time
@@ -22,7 +23,7 @@ from repositories.cnos.src.model.dinov2 import descriptor_from_hydra
 
 
 def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, split: str, cfg: DictConfig,
-                           cnos_model_name: str):
+                           detector_model_name: str):
     cnos_model: CNOS = instantiate(cfg.model).to('cuda')
     cnos_model.move_to_device()
     folder = folder.resolve()
@@ -38,14 +39,14 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
         if not image_folder.exists():
             continue
 
-        segment_model_name = 'fastsam' if cnos_model_name == 'cnos_fast' else 'sam'
-
         # Create directories for both DINOv2 and DINOv3
         cache_sequence_dir = base_cache_folder / dataset / split / sequence.name
-        proposals_dir_dinov2 = cache_sequence_dir / f"cnos_{segment_model_name}_detections_dinov2"
-        detections_visual_dir = cache_sequence_dir / f"cnos_{segment_model_name}_visual"
-        proposals_dir_dinov3 = cache_sequence_dir / f"cnos_{segment_model_name}_detections_dinov3"
+        proposals_dir_dinov2 = cache_sequence_dir / f"cnos_{detector_model_name}_detections_dinov2"
+        detections_visual_dir = cache_sequence_dir / f"cnos_{detector_model_name}_visual"
+        proposals_dir_dinov3 = cache_sequence_dir / f"cnos_{detector_model_name}_detections_dinov3"
 
+        if detections_visual_dir.exists():
+            shutil.rmtree(detections_visual_dir)
         proposals_dir_dinov2.mkdir(parents=True, exist_ok=True)
         detections_visual_dir.mkdir(parents=True, exist_ok=True)
         proposals_dir_dinov3.mkdir(parents=True, exist_ok=True)
@@ -106,7 +107,9 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
 
 
 def main():
-    model = 'cnos'
+    detector = 'sam2'
+
+    assert detector == 'sam' or detector == 'fast_sam' or detector == 'sam2'
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -118,7 +121,7 @@ def main():
     sys.path.append('/repositories/cnos')
     cfg_dir = (Path(__file__).parent / "configs").resolve()
     with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
-        cfg = compose(config_name="run_inference", overrides=[f"model={model}"])
+        cfg = compose(config_name="run_inference", overrides=[f"model/segmentor_model={detector}"])
 
     base_path = Path('/mnt/personal/jelint19/data/')
     bop_path = base_path / 'bop'
@@ -148,7 +151,7 @@ def main():
         split = folder_path.name
         dataset = folder_path.parent.name
 
-        infer_masks_for_folder(folder_path, base_cache_path, dataset, split, cfg, model)
+        infer_masks_for_folder(folder_path, base_cache_path, dataset, split, cfg, detector)
 
 
 if __name__ == "__main__":

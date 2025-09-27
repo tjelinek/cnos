@@ -5,7 +5,7 @@ segmentor_width_size: 640 # make it stable
 descriptor_width_size: 640
 
 defaults:
-  - segmentor_model: fast_sam
+  - segmentor_model: fastsam
   - descriptor_model: dinov2
   
 post_processing_config:

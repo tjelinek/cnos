@@ -114,7 +114,7 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
 def main():
     detector = 'sam2'
 
-    assert detector == 'sam' or detector == 'fast_sam' or detector == 'sam2'
+    assert detector == 'sam' or detector == 'fastsam' or detector == 'sam2'
 
     parser = argparse.ArgumentParser()
     parser.add_argument(

@@ -1,4 +1,5 @@
 import argparse
+import logging
 import pickle
 import shutil
 import sys
@@ -26,8 +27,7 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
                            detector_model_name: str):
 
     # Silence SAM2 logs
-    logging.getLogger("segment_anything").setLevel(logging.WARNING)
-    logging.getLogger("sam2").setLevel(logging.WARNING)
+    logging.getLogger().setLevel(logging.WARNING)
 
     cnos_model: CNOS = instantiate(cfg.model).to('cuda')
     cnos_model.move_to_device()

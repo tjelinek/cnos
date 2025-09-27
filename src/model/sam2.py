@@ -157,7 +157,6 @@ class CustomSamAutomaticMaskGenerator:
         # Stack into tensors
         masks_tensor = torch.stack(masks, dim=0)
         boxes_tensor = torch.tensor(boxes, dtype=torch.float32).to(self.sam.device)
-        breakpoint()
 
         return {
             "masks": masks_tensor,

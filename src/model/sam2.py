@@ -2,15 +2,11 @@
 from sam2.build_sam import build_sam2
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
-import logging
 import numpy as np
 import torch
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-import logging
-sam2_logger = logging.getLogger('sam2')
-sam2_logger.setLevel(logging.WARNING)  # Only show warnings and errors
 
 def load_sam2(
         model_type: str,

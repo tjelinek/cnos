@@ -24,6 +24,11 @@ from repositories.cnos.src.model.dinov2 import descriptor_from_hydra
 
 def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, split: str, cfg: DictConfig,
                            detector_model_name: str):
+
+    # Silence SAM2 logs
+    logging.getLogger("segment_anything").setLevel(logging.WARNING)
+    logging.getLogger("sam2").setLevel(logging.WARNING)
+
     cnos_model: CNOS = instantiate(cfg.model).to('cuda')
     cnos_model.move_to_device()
     folder = folder.resolve()

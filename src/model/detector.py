@@ -166,13 +166,21 @@ class CNOS(pl.LightningModule):
     def move_to_device(self):
         self.descriptor_model.model = self.descriptor_model.model.to(self.device)
         self.descriptor_model.model.device = self.device
-        # if there is predictor in the model, move it to device
+
+        # Move segmentor model to device - handle both SAM1 and SAM2
         if hasattr(self.segmentor_model, "predictor"):
+            # SAM1 path - has predictor attribute
             self.segmentor_model.predictor.model = (
                 self.segmentor_model.predictor.model.to(self.device)
             )
-        else:
+        elif hasattr(self.segmentor_model.model, "setup_model"):
+            # SAM1 path - has setup_model method
             self.segmentor_model.model.setup_model(device=self.device, verbose=True)
+        else:
+            # SAM2 path - move the underlying sam model to device
+            self.segmentor_model.sam = self.segmentor_model.sam.to(self.device)
+            logging.info("Loaded checkpoint sucessfully")
+
         logging.info(f"Moving models to {self.device} done!")
 
     def find_matched_proposals(self, proposal_decriptors):

@@ -112,16 +112,20 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
 
 
 def main():
-    detector = 'sam2'
-
-    assert detector == 'sam' or detector == 'fastsam' or detector == 'sam2'
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--dataset",
         help="Dataset shortcut to run on. If not provided, runs on all datasets."
     )
+    parser.add_argument(
+        "--detector",
+        default="sam",
+        choices=["sam", "fastsam", "sam2"],
+        help="Detector type to use. Default: sam"
+    )
     args = parser.parse_args()
+
+    detector = args.detector
 
     sys.path.append('/repositories/cnos')
     cfg_dir = (Path(__file__).parent / "configs").resolve()

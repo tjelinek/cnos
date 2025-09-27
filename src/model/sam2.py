@@ -8,6 +8,9 @@ import torch
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import logging
+sam2_logger = logging.getLogger('sam2')
+sam2_logger.setLevel(logging.WARNING)  # Only show warnings and errors
 
 def load_sam2(
         model_type: str,
@@ -114,90 +117,49 @@ class CustomSamAutomaticMaskGenerator:
         return self.sam
 
     def generate(self, image: np.ndarray) -> List[Dict[str, Any]]:
-        """Generate masks - unified interface for SAM1 and SAM2."""
-        if self.is_sam2:
-            return self._sam2_generator.generate(image)
-        else:
-            return self.generate_masks(image)
+        """Generate masks using SAM2."""
+        return self._sam2_generator.generate(image)
 
-    def preprocess_resize(self, image: np.ndarray):
-        orig_size = image.shape[:2]
-        height_size = int(self.segmentor_width_size * orig_size[0] / orig_size[1])
-        resized_image = cv2.resize(
-            image.copy(), (self.segmentor_width_size, height_size)  # (width, height)
-        )
-        return resized_image
+    def generate_masks(self, image: np.ndarray) -> Dict[str, torch.Tensor]:
+        """Generate masks and return in format expected by Detections class."""
+        # Get SAM2 results
+        sam2_results = self._sam2_generator.generate(image)
 
-    def postprocess_resize(self, detections, orig_size):
-        detections["masks"] = F.interpolate(
-            detections["masks"].unsqueeze(1).float(),
-            size=(orig_size[0], orig_size[1]),
-            mode="bilinear",
-            align_corners=False,
-        )[:, 0, :, :]
-        scale = orig_size[1] / self.segmentor_width_size
-        detections["boxes"] = detections["boxes"].float() * scale
-        detections["boxes"][:, [0, 2]] = torch.clamp(
-            detections["boxes"][:, [0, 2]], 0, orig_size[1] - 1
-        )
-        detections["boxes"][:, [1, 3]] = torch.clamp(
-            detections["boxes"][:, [1, 3]], 0, orig_size[0] - 1
-        )
-        return detections
+        if not sam2_results:
+            # Return empty tensors if no detections
+            h, w, c = image.shape
+            return {
+                "masks": torch.empty(0, h, w, dtype=torch.bool).to(self.sam.device),
+                "boxes": torch.empty(0, 4, dtype=torch.float32).to(self.sam.device)
+            }
 
-    @torch.no_grad()
-    def generate_masks(self, image: np.ndarray) -> List[Dict[str, Any]]:
-        if self.segmentor_width_size is not None:
-            orig_size = image.shape[:2]
-            image = self.preprocess_resize(image)
-        # Generate masks
-        mask_data = self._generate_masks(image)
+        # Convert SAM2 format to expected format
+        masks = []
+        boxes = []
 
-        # Filter small disconnected regions and holes in masks
-        if self.min_mask_region_area > 0:
-            mask_data = self.postprocess_small_regions(
-                mask_data,
-                self.min_mask_region_area,
-                max(self.box_nms_thresh, self.crop_nms_thresh),
-            )
-        if self.segmentor_width_size is not None:
-            mask_data = self.postprocess_resize(mask_data, orig_size)
-        return mask_data
+        for result in sam2_results:
+            # Extract mask
+            if isinstance(result["segmentation"], dict):
+                # RLE format - need to decode
+                from pycocotools import mask as mask_utils
+                mask = mask_utils.decode(result["segmentation"])
+            else:
+                # Binary mask format
+                mask = result["segmentation"]
+            masks.append(torch.from_numpy(mask.astype(bool)).to(self.sam.device))
 
-    def _generate_masks(self, image: np.ndarray) -> MaskData:
-        orig_size = image.shape[:2]
-        crop_boxes, layer_idxs = generate_crop_boxes(
-            orig_size, self.crop_n_layers, self.crop_overlap_ratio
-        )
+            # Extract box (convert from XYWH to XYXY format)
+            bbox = result["bbox"]  # [x, y, w, h]
+            x, y, w, h = bbox
+            xyxy_box = [x, y, x + w, y + h]  # [x1, y1, x2, y2]
+            boxes.append(xyxy_box)
 
-        # Iterate over image crops
-        data = MaskData()
-        for crop_box, layer_idx in zip(crop_boxes, layer_idxs):
-            crop_data = self._process_crop(image, crop_box, layer_idx, orig_size)
-            data.cat(crop_data)
+        # Stack into tensors
+        masks_tensor = torch.stack(masks, dim=0)
+        boxes_tensor = torch.tensor(boxes, dtype=torch.float32).to(self.sam.device)
+        breakpoint()
 
-        # Remove duplicate masks between crops
-        if len(crop_boxes) > 1:
-            # Prefer masks from smaller crops
-            scores = 1 / box_area(data["crop_boxes"])
-            scores = scores.to(data["boxes"].device)
-            keep_by_nms = batched_nms(
-                data["boxes"].float(),
-                scores,
-                torch.zeros_like(data["boxes"][:, 0]),  # categories
-                iou_threshold=self.crop_nms_thresh,
-            )
-            data.filter(keep_by_nms)
-
-        data["masks"] = [torch.from_numpy(rle_to_mask(rle)) for rle in data["rles"]]
-        data["masks"] = torch.stack(data["masks"])
-        data["masks"] = data["masks"].to(data["boxes"].device)
-        # return data
-        return {"masks": data["masks"], "boxes": data["boxes"]}
-
-    def remove_small_detections(self, mask_data: MaskData, img_size: List) -> MaskData:
-        # calculate area and number of pixels in each mask
-        area = box_area(mask_data["boxes"]) / (img_size[0] * img_size[1])
-        idx_selected = area >= self.mask_post_processing.min_box_size
-        mask_data.filter(idx_selected)
-        return mask_data
+        return {
+            "masks": masks_tensor,
+            "boxes": boxes_tensor
+        }

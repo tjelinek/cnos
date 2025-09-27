@@ -1,4 +1,4 @@
-_target_: src.model.fast_sam.FastSAM
+_target_: src.model.fastsam.FastSAM
 checkpoint_path: /mnt/personal/jelint19/weights/FastSAM/FastSAM-x.pt
 segmentor_width_size: ${model.segmentor_width_size}
 config:

@@ -7,6 +7,7 @@ import torch
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import logging
 
 def load_sam2(
         model_type: str,

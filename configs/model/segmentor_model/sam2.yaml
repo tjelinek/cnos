@@ -1,7 +1,7 @@
 # SAM2 Configuration
 _target_: src.model.sam2.CustomSamAutomaticMaskGenerator
 points_per_batch: 64
-stability_score_thresh: 0.97
+stability_score_thresh: 0.75
 box_nms_thresh: 0.7
 min_mask_region_area: 0
 crop_overlap_ratio:

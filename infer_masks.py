@@ -37,6 +37,8 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
     descriptor_dinov3 = descriptor_from_hydra('dinov3')
 
     all_sequences = sorted(folder.iterdir())
+    import random
+    random.shuffle(all_sequences)
     for sequence in tqdm(all_sequences, desc=f"[{folder}] Sequences", total=len(all_sequences)):
         image_folder = sequence / 'rgb'
         if not image_folder.exists():

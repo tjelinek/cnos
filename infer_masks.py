@@ -40,77 +40,90 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
     import random
     random.shuffle(all_sequences)
     for sequence in tqdm(all_sequences, desc=f"[{folder}] Sequences", total=len(all_sequences)):
-        image_folder = sequence / 'rgb'
-        if not image_folder.exists():
-            image_folder = sequence / 'grayscale'
-        if not image_folder.exists():
-            continue
-
-        # Create directories for both DINOv2 and DINOv3
-        cache_sequence_dir = base_cache_folder / dataset / split / sequence.name
-        proposals_dir_dinov2 = cache_sequence_dir / f"cnos_{detector_model_name}_detections_dinov2"
-        detections_visual_dir = cache_sequence_dir / f"cnos_{detector_model_name}_visual"
-        proposals_dir_dinov3 = cache_sequence_dir / f"cnos_{detector_model_name}_detections_dinov3"
-
-        if detections_visual_dir.exists():
-            shutil.rmtree(detections_visual_dir)
-        proposals_dir_dinov2.mkdir(parents=True, exist_ok=True)
-        detections_visual_dir.mkdir(parents=True, exist_ok=True)
-        proposals_dir_dinov3.mkdir(parents=True, exist_ok=True)
-
-        all_images = sorted(image_folder.iterdir())
-        for img_idx, img_path in tqdm(enumerate(all_images), total=len(all_images),
-                                      leave=False, desc=f"Images in {dataset}/{split}/{sequence.name}"):
-            img_name = img_path.stem
-
-            pickle_path_dinov2 = Path(f"{proposals_dir_dinov2}/{img_name}.pkl")
-            pickle_path_dinov3 = Path(f"{proposals_dir_dinov3}/{img_name}.pkl")
-
-            # Skip if both files already exist
-            if pickle_path_dinov2.exists() and pickle_path_dinov3.exists():
+        source_channels = ['rgb']
+        if 'quest3' in split:
+            source_channels = ['gray1', 'gray2']
+        elif 'aria' in split:
+            source_channels = ['gray1', 'gray2', 'rgb']
+        for channel in tqdm(source_channels, desc=f'Channel in {dataset}/{split}/{sequence.name}',
+                            total=len(source_channels), disable=(len(source_channels) == 1)):
+            image_folder = sequence / channel
+            if not image_folder.exists():
+                image_folder = sequence / 'grayscale'
+            if not image_folder.exists():
                 continue
 
-            img = np.array(Image.open(img_path).convert("RGB"))
-            start_time = time()
-            torch.cuda.synchronize()
-            detections = cnos_model.get_filtered_detections(img)
-            torch.cuda.synchronize()
-            detections_time = time() - start_time
+            # Create directories for both DINOv2 and DINOv3
+            cache_sequence_dir = base_cache_folder / dataset / split / sequence.name
 
-            masks = detections.masks
-            masks_rle = mask_to_rle_pytorch((masks > 0).to(torch.long))
+            if channel == 'rgb':
+                proposals_dir_dinov2 = cache_sequence_dir / f"cnos_{detector_model_name}_detections_dinov2"
+                detections_visual_dir = cache_sequence_dir / f"cnos_{detector_model_name}_visual"
+                proposals_dir_dinov3 = cache_sequence_dir / f"cnos_{detector_model_name}_detections_dinov3"
+            else:
+                proposals_dir_dinov2 = cache_sequence_dir / f"{channel}_cnos_{detector_model_name}_detections_dinov2"
+                detections_visual_dir = cache_sequence_dir / f"{channel}_cnos_{detector_model_name}_visual"
+                proposals_dir_dinov3 = cache_sequence_dir / f"{channel}_cnos_{detector_model_name}_detections_dinov3"
 
-            # Process both DINOv2 and DINOv3 descriptors
-            for descriptor_func, pickle_path in [(descriptor_dinov2, pickle_path_dinov2),
-                                                 (descriptor_dinov3, pickle_path_dinov3)]:
-                if not pickle_path.exists():
-                    start_time = time()
-                    torch.cuda.synchronize()
-                    detections_cls_descriptors, detections_patch_descriptors = descriptor_func(img, detections)
-                    torch.cuda.synchronize()
-                    description_time = time() - start_time
+            if detections_visual_dir.exists():
+                shutil.rmtree(detections_visual_dir)
+            proposals_dir_dinov2.mkdir(parents=True, exist_ok=True)
+            detections_visual_dir.mkdir(parents=True, exist_ok=True)
+            proposals_dir_dinov3.mkdir(parents=True, exist_ok=True)
 
-                    detection_dict = {
-                        "masks": masks_rle,
-                        "descriptors": detections_cls_descriptors.numpy(force=True),
-                        # "patch_descriptors": detections_patch_descriptors.numpy(force=True),
-                        "detection_time": detections_time,
-                        "description_time": description_time,
-                    }
+            all_images = sorted(image_folder.iterdir())
+            for img_idx, img_path in tqdm(enumerate(all_images), total=len(all_images),
+                                          leave=False, desc=f"Images in {dataset}/{split}/{sequence.name}"):
+                img_name = img_path.stem
 
-                    with open(pickle_path, "wb") as pickle_file:
-                        pickle.dump(detection_dict, pickle_file)
+                pickle_path_dinov2 = Path(f"{proposals_dir_dinov2}/{img_name}.pkl")
+                pickle_path_dinov3 = Path(f"{proposals_dir_dinov3}/{img_name}.pkl")
 
-            # Save visualizations (only for DINOv2 to avoid duplication since masks are the same)
-            all_images_div_10 = len(all_images) // 10
-            all_images_div_10 = round(all_images_div_10, -1)
-            if img_idx % max(10, all_images_div_10) == 0:
-                for i, m in enumerate(masks):
-                    mask_uint8 = (m.numpy(force=True).astype(np.uint8) * 255)
-                    vis = overlay_mask(img, m.numpy(force=True).astype(np.float32))
-                    # cv2.imwrite(str(proposals_dir_dinov2 / f"{img_name}_{i:06d}.png"), mask_uint8)
-                    cv2.imwrite(str(detections_visual_dir / f"{img_name}_{i:06d}.jpg"),
-                                cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
+                # Skip if both files already exist
+                if pickle_path_dinov2.exists() and pickle_path_dinov3.exists():
+                    continue
+
+                img = np.array(Image.open(img_path).convert("RGB"))
+                start_time = time()
+                torch.cuda.synchronize()
+                detections = cnos_model.get_filtered_detections(img)
+                torch.cuda.synchronize()
+                detections_time = time() - start_time
+
+                masks = detections.masks
+                masks_rle = mask_to_rle_pytorch((masks > 0).to(torch.long))
+
+                # Process both DINOv2 and DINOv3 descriptors
+                for descriptor_func, pickle_path in [(descriptor_dinov2, pickle_path_dinov2),
+                                                     (descriptor_dinov3, pickle_path_dinov3)]:
+                    if not pickle_path.exists():
+                        start_time = time()
+                        torch.cuda.synchronize()
+                        detections_cls_descriptors, detections_patch_descriptors = descriptor_func(img, detections)
+                        torch.cuda.synchronize()
+                        description_time = time() - start_time
+
+                        detection_dict = {
+                            "masks": masks_rle,
+                            "descriptors": detections_cls_descriptors.numpy(force=True),
+                            # "patch_descriptors": detections_patch_descriptors.numpy(force=True),
+                            "detection_time": detections_time,
+                            "description_time": description_time,
+                        }
+
+                        with open(pickle_path, "wb") as pickle_file:
+                            pickle.dump(detection_dict, pickle_file)
+
+                # Save visualizations (only for DINOv2 to avoid duplication since masks are the same)
+                all_images_div_10 = len(all_images) // 10
+                all_images_div_10 = round(all_images_div_10, -1)
+                if img_idx % max(10, all_images_div_10) == 0:
+                    for i, m in enumerate(masks):
+                        mask_uint8 = (m.numpy(force=True).astype(np.uint8) * 255)
+                        vis = overlay_mask(img, m.numpy(force=True).astype(np.float32))
+                        # cv2.imwrite(str(proposals_dir_dinov2 / f"{img_name}_{i:06d}.png"), mask_uint8)
+                        cv2.imwrite(str(detections_visual_dir / f"{img_name}_{i:06d}.jpg"),
+                                    cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
 
 
 def main():
@@ -137,6 +150,10 @@ def main():
     base_path = Path('/mnt/personal/jelint19/data/')
     bop_path = base_path / 'bop'
     folders = {
+        "hot3d-aira": bop_path / 'hot3d' / 'test_aria_scenewise',
+        "hot3d-quest3": bop_path / 'hot3d' / 'test_quest3_scenewise',
+        "hot3d-aira-train": bop_path / 'hot3d' / 'train_aria_scenewise',
+        "hot3d-quest3-train": bop_path / 'hot3d' / 'train_quest3_scenewise',
         "lmo": bop_path / 'lmo' / 'test',
         "tless": bop_path / 'tless' / 'test_primesense',
         # "tudl": bop_path / 'tudl' / 'test',

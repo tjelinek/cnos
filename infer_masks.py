@@ -39,7 +39,7 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
     all_sequences = sorted(folder.iterdir())
     import random
     random.shuffle(all_sequences)
-    for sequence in tqdm(all_sequences, desc=f"detector_model_name: [{folder}] Sequences", total=len(all_sequences)):
+    for sequence in tqdm(all_sequences, desc=f"{detector_model_name}: [{folder}] Sequences", total=len(all_sequences)):
         source_channels = ['rgb']
         if 'quest3' in split:
             source_channels = ['gray1', 'gray2']

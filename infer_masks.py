@@ -39,14 +39,14 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
     all_sequences = sorted(folder.iterdir())
     import random
     random.shuffle(all_sequences)
-    for sequence in tqdm(all_sequences, desc=f"[{folder}] Sequences", total=len(all_sequences)):
+    for sequence in tqdm(all_sequences, desc=f"detector_model_name: [{folder}] Sequences", total=len(all_sequences)):
         source_channels = ['rgb']
         if 'quest3' in split:
             source_channels = ['gray1', 'gray2']
         elif 'aria' in split:
             source_channels = ['gray1', 'gray2', 'rgb']
         for channel in tqdm(source_channels, desc=f'Channel in {dataset}/{split}/{sequence.name}',
-                            total=len(source_channels), disable=(len(source_channels) == 1)):
+                            total=len(source_channels), disable=True):
             image_folder = sequence / channel
             if not image_folder.exists():
                 image_folder = sequence / 'grayscale'
@@ -73,7 +73,8 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
 
             all_images = sorted(image_folder.iterdir())
             for img_idx, img_path in tqdm(enumerate(all_images), total=len(all_images),
-                                          leave=False, desc=f"Images in {dataset}/{split}/{sequence.name}"):
+                                          leave=False, desc=f"Images in {dataset}/{split}/{sequence.name}",
+                                          disable=True):
                 img_name = img_path.stem
 
                 pickle_path_dinov2 = Path(f"{proposals_dir_dinov2}/{img_name}.pkl")

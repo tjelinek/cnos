@@ -73,7 +73,8 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
 
             all_images = sorted(image_folder.iterdir())
             for img_idx, img_path in tqdm(enumerate(all_images), total=len(all_images),
-                                          leave=False, desc=f"Images in {dataset}/{split}/{sequence.name}"):
+                                          leave=False, desc=f"Images in {dataset}/{split}/{sequence.name}",
+                                          disable=True):
                 img_name = img_path.stem
 
                 pickle_path_dinov2 = Path(f"{proposals_dir_dinov2}/{img_name}.pkl")

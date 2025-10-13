@@ -48,6 +48,7 @@ class CustomDINOv2(pl.LightningModule):
             patch_size=14,
             model_type="dinov2",
             normalization=None,
+            apply_image_mask=True
     ):
         super().__init__()
         self.model_name = model_name
@@ -55,6 +56,7 @@ class CustomDINOv2(pl.LightningModule):
         self.token_name = token_name
         self.chunk_size = chunk_size
         self.model_type = model_type
+        self.apply_image_mask: bool = apply_image_mask
 
         # Determine patch size based on model type
         if model_type == "dinov3":
@@ -103,7 +105,8 @@ class CustomDINOv2(pl.LightningModule):
         num_proposals = len(masks)
         rgb = self.rgb_normalize(image_np).to(masks.device).float()
         rgbs = rgb.unsqueeze(0).repeat(num_proposals, 1, 1, 1)
-        masked_rgbs = rgbs * masks.unsqueeze(1)
+        if self.apply_image_mask:
+            masked_rgbs = rgbs * masks.unsqueeze(1)
         processed_masked_rgbs = self.rgb_proposal_processor(
             masked_rgbs, boxes
         )  # [N, 3, target_size, target_size]

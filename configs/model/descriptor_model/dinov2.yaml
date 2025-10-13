@@ -8,3 +8,4 @@
   descriptor_width_size: ${model.descriptor_width_size}
   image_size: 224
   chunk_size: 16
+  apply_image_mask: True

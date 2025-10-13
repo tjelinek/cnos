@@ -30,7 +30,6 @@ def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
         similarity = similarity_function(proposal_cls_descriptors, obj_descriptor)
         similarities[obj_id] = similarity.squeeze(-1)
 
-    per_obj_proposal_topk_templates = {}
     aggregated_similarities = {}
     for obj_id in similarities.keys():
         if aggregation_function == "mean":

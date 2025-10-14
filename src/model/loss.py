@@ -1,3 +1,6 @@
+from typing import Optional
+
+import torch
 from torch import nn
 import torch.nn.functional as F
 from src.model.utils import BatchedData
@@ -17,7 +20,7 @@ class Similarity(nn.Module):
 
 
 class PairwiseSimilarity(nn.Module):
-    def __init__(self, metric="cosine", chunk_size=64):
+    def __init__(self, metric="cosine", template_csls_avg: Optional[torch.Tensor] = None, csls_k: int = 10):
         super(PairwiseSimilarity, self).__init__()
         self.metric = metric
         self.chunk_size = chunk_size

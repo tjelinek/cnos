@@ -32,9 +32,7 @@ class PairwiseSimilarity(nn.Module):
 
         similarity = BatchedData(batch_size=None)
         for idx_obj in range(N_objects):
-            sim = F.cosine_similarity(
-                queries, references[:, idx_obj], dim=-1
-            )  # N_query x N_templates
+            sim = F.cosine_similarity(queries, references[:, idx_obj], dim=-1)  # N_query x N_templates
             similarity.append(sim)
         similarity.stack()
         similarity = similarity.data

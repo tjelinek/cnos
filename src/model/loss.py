@@ -23,7 +23,6 @@ class PairwiseSimilarity(nn.Module):
     def __init__(self, metric="cosine", template_csls_avg: Optional[torch.Tensor] = None, csls_k: int = 10):
         super(PairwiseSimilarity, self).__init__()
         self.metric = metric
-        self.chunk_size = chunk_size
 
     def forward(self, query, reference):
         N_query = query.shape[0]

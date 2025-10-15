@@ -20,19 +20,20 @@ class Similarity(nn.Module):
 
 
 class PairwiseSimilarity(nn.Module):
-    def __init__(self, metric="cosine", template_csls_avg: Optional[torch.Tensor] = None, csls_k: int = 10):
+    def __init__(self, metric="cosine"):
         super(PairwiseSimilarity, self).__init__()
         self.metric = metric
 
-    def forward(self, query, reference):
+    def forward(self, query: torch.Tensor, reference: torch.Tensor, template_csls_avg: Optional[torch.Tensor] = None,
+                csls_k: int = 10) -> torch.Tensor:
         N_query = query.shape[0]
         N_objects, N_templates = reference.shape[0], reference.shape[1]
-        references = reference.clone().unsqueeze(0).repeat(N_query, 1, 1, 1)
-        queries = query.clone().unsqueeze(1).repeat(1, N_templates, 1)
+
+        references = reference.unsqueeze(0).expand(N_query, -1, -1, -1)
+        queries = query.unsqueeze(1).expand(-1, N_templates, -1)
         queries = F.normalize(queries, dim=-1)
         references = F.normalize(references, dim=-1)
-
-        similarity = BatchedData(batch_size=None)
+        sims = []
         for idx_obj in range(N_objects):
             sim = F.cosine_similarity(queries, references[:, idx_obj], dim=-1)  # N_query x N_templates
             similarity.append(sim)
@@ -40,3 +41,8 @@ class PairwiseSimilarity(nn.Module):
         similarity = similarity.data
         similarity = similarity.permute(1, 0, 2)  # N_query x N_objects x N_templates
         return similarity.clamp(min=0.0, max=1.0)
+            sim = F.cosine_similarity(queries, references[:, idx_obj], dim=-1)
+            sims.append(sim)
+        S = torch.stack(sims, dim=1)
+
+        return S.clamp(min=0.0, max=1.0)

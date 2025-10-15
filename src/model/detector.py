@@ -3,7 +3,7 @@ import logging
 import os
 import os.path as osp
 import time
-from typing import Any, Dict, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import pytorch_lightning as pl
@@ -11,17 +11,19 @@ import torch
 import torchvision.transforms as T
 from tqdm import tqdm
 
+from condensate_templates import TemplateBank
 from src.model.loss import PairwiseSimilarity
 from src.model.utils import BatchedData, Detections, convert_npz_to_json
 from src.utils.inout import save_json_bop23
 
 
-def compute_templates_similarity_scores(db_descriptors: Dict[Any, torch.Tensor],
+def compute_templates_similarity_scores(template_data: TemplateBank,
                                         proposal_cls_descriptors: torch.Tensor,
                                         similarity_function: PairwiseSimilarity, aggregation_function: str,
                                         matching_confidence_thresh: float, matching_max_num_instances: int) -> \
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict[int, torch.Tensor]]:
 
+    db_descriptors = template_data.cls_desc
     sorted_obj_keys = sorted(db_descriptors.keys())
 
     similarities = {}

@@ -54,12 +54,14 @@ def compute_templates_similarity_scores(template_data: TemplateBank,
     sorted_obj_keys = sorted(db_descriptors.keys())
 
     similarities = {}
-    for obj_id in sorted_obj_keys:
-        obj_descriptor = db_descriptors[obj_id].unsqueeze(1)
-        similarity = similarity_function(proposal_cls_descriptors, obj_descriptor)
-        similarities[obj_id] = similarity.squeeze(-1)
 
     rx, rt, splits = compute_csls_terms(proposal_cls_descriptors, db_descriptors)
+    for i, obj_id in enumerate(sorted_obj_keys):
+        obj_descriptor = db_descriptors[obj_id]
+
+        rt_obj_id = rt[splits[i]:splits[i+1]]
+        similarity = similarity_function(proposal_cls_descriptors, obj_descriptor, rx, rt_obj_id)
+        similarities[obj_id] = similarity
 
     aggregated_similarities = {}
     for obj_id in similarities.keys():

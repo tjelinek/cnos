@@ -18,7 +18,7 @@ matching_config:
   metric:
     _target_: src.model.loss.PairwiseSimilarity
     metric: cosine
-  aggregation_function: avg_5
+  aggregation_function: max
   confidence_thresh: 0.15
   max_num_instances: 100 # max number of instances to consider, 100 is used in BOP toolkit
 

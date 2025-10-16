@@ -3,7 +3,7 @@ import logging
 import os
 import os.path as osp
 import time
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import numpy as np
 import pytorch_lightning as pl
@@ -19,8 +19,9 @@ from src.utils.inout import save_json_bop23
 
 def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cls_descriptors: torch.Tensor,
                                         similarity_function: PairwiseSimilarity, aggregation_function: str,
-                                        matching_confidence_thresh: float, matching_max_num_instances: int) -> \
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict[int, torch.Tensor]]:
+                                        matching_confidence_thresh: float, matching_max_num_instances: int,
+                                        use_per_template_confidence: bool = True, use_mahalanobis_dist: bool = False) \
+        -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict[int, torch.Tensor]]:
 
     db_descriptors = template_data.cls_desc
     sorted_obj_keys = sorted(db_descriptors.keys())
@@ -36,29 +37,34 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
         similarities[obj_id] = similarity
 
     aggregated_similarities = {}
+    aggregated_templates_ids = {}
     for obj_id in similarities.keys():
         if aggregation_function == "mean":
             # N_proposals x N_objects
             score_per_proposal = (torch.sum(similarities[obj_id], dim=-1) / similarities[obj_id].shape[-1])
+            proposal_indices = torch.arange(similarities[obj_id].shape[1], device=similarities[obj_id].device)
         elif aggregation_function == "median":
-            score_per_proposal = torch.median(similarities[obj_id], dim=-1)[0]
+            score_per_proposal, proposal_indices = torch.median(similarities[obj_id], dim=-1)
         elif aggregation_function == "max":
-            score_per_proposal = torch.max(similarities[obj_id], dim=-1)[0]
+            score_per_proposal, proposal_indices = torch.max(similarities[obj_id], dim=-1)
         elif aggregation_function == "avg_5":
             k = min(similarities[obj_id].shape[-1], 5)
-            obj_i_proposal_topk_templates = torch.topk(similarities[obj_id], k=k, dim=-1)
-            score_per_proposal = torch.mean(obj_i_proposal_topk_templates[0], dim=-1)
+            score_per_proposal, proposal_indices = torch.topk(similarities[obj_id], k=k, dim=-1)
+            score_per_proposal = torch.mean(score_per_proposal, dim=-1)
         else:
             raise ValueError("Unknown aggregation function")
 
         aggregated_similarities[obj_id] = score_per_proposal
+        aggregated_templates_ids[obj_id] = proposal_indices
 
     score_per_proposal_and_object = torch.stack([aggregated_similarities[k] for k in sorted_obj_keys], dim=-1)
+    aggregated_templates_ids = torch.stack([aggregated_templates_ids[k] for k in sorted_obj_keys], dim=-1)
 
     # assign each proposal to the object with the highest scores
     idx_selected_proposals, pred_idx_objects, pred_score_distribution, pred_scores = \
-        select_top_matching_proposals(score_per_proposal_and_object, matching_confidence_thresh,
-                                      matching_max_num_instances)
+        select_top_matching_proposals(score_per_proposal_and_object, aggregated_templates_ids,
+                                      matching_confidence_thresh, sorted_obj_keys, matching_max_num_instances,
+                                      template_data, use_per_template_confidence)
 
     filter_similarities_dict(similarities, idx_selected_proposals)
 
@@ -73,12 +79,30 @@ def filter_similarities_dict(similarities, idx_selected_proposals):
         similarities[obj_id] = similarities[obj_id][idx_selected_proposals]
 
 
-def select_top_matching_proposals(score_per_proposal_and_object: torch.Tensor, matching_confidence_thresh: float,
-                                  matching_max_num_instances: int) -> \
+def select_top_matching_proposals(score_per_proposal_and_object: torch.Tensor, aggregated_templates_ids,
+                                  matching_confidence_thresh: float, sorted_obj_keys: List[int],
+                                  matching_max_num_instances: int, template_data: TemplateBank,
+                                  use_per_template_threshold: bool) -> \
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     score_per_proposal, assigned_idx_object = torch.max(score_per_proposal_and_object, dim=-1)  # N_query
     idx_proposals = torch.arange(len(score_per_proposal), device=score_per_proposal.device)
-    idx_selected_proposals = idx_proposals[score_per_proposal > matching_confidence_thresh]
+
+    if use_per_template_threshold:
+        device = assigned_idx_object.device
+        assigned_template_id = \
+            aggregated_templates_ids[torch.arange(assigned_idx_object.shape[0], device=device), assigned_idx_object]
+
+        template_thresholds = template_data.template_thresholds
+        thresholds_for_selected_objs = []
+        for det_id, obj_id in enumerate(assigned_idx_object):
+            threshold = template_thresholds[sorted_obj_keys[obj_id]][assigned_template_id[det_id]]
+            thresholds_for_selected_objs.append(threshold)
+
+        thresholds_for_selected_objs = torch.stack(thresholds_for_selected_objs)
+
+        idx_selected_proposals = idx_proposals[score_per_proposal > thresholds_for_selected_objs]
+    else:
+        idx_selected_proposals = idx_proposals[score_per_proposal > matching_confidence_thresh]
     # for bop challenge, we only keep top 100 instances
     if len(idx_selected_proposals) > matching_max_num_instances:
         logging.info(f"Selecting top {matching_max_num_instances} instances ...")

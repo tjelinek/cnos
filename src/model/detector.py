@@ -20,23 +20,28 @@ import torch.nn.functional as F
 
 def compute_csls_terms(proposal_descriptors, template_descriptors, k=10):
     objs = sorted(template_descriptors.keys())
+
+    splits = [0]
+    for o in objs:
+        splits.append(splits[-1] + template_descriptors[o].size(0))
+
     template = torch.cat([template_descriptors[o] for o in objs], dim=0)  # [Nt, D]
-    prop = proposal_descriptors                           # [Nq, D]
+    prop = proposal_descriptors  # [Nq, D]
 
     prop = F.normalize(prop, dim=1)
-    template = F.normalize(template,   dim=1)
+    template = F.normalize(template, dim=1)
 
-    S = prop @ template.T                                       # [Nq, Nt]
+    S = prop @ template.T  # [Nq, Nt]
 
     kx = min(k, max(1, template.size(0) - 1))
-    rx = torch.topk(S, k=kx, dim=1).values.mean(dim=1)    # [Nq]
+    rx = torch.topk(S, k=kx, dim=1).values.mean(dim=1)  # [Nq]
 
-    T = template @ template.T                                         # [Nt, Nt]
-    T.fill_diagonal_(-float('inf'))                       # exclude self
+    T = template @ template.T  # [Nt, Nt]
+    T.fill_diagonal_(-float('inf'))  # exclude self
     kt = min(k, max(1, template.size(0) - 1))
-    rt = torch.topk(T, k=kt, dim=1).values.mean(dim=1)    # [Nt]
+    rt = torch.topk(T, k=kt, dim=1).values.mean(dim=1)  # [Nt]
 
-    return rx, rt
+    return rx, rt, splits
 
 
 def compute_templates_similarity_scores(template_data: TemplateBank,
@@ -53,6 +58,8 @@ def compute_templates_similarity_scores(template_data: TemplateBank,
         obj_descriptor = db_descriptors[obj_id].unsqueeze(1)
         similarity = similarity_function(proposal_cls_descriptors, obj_descriptor)
         similarities[obj_id] = similarity.squeeze(-1)
+
+    rx, rt, splits = compute_csls_terms(proposal_cls_descriptors, db_descriptors)
 
     aggregated_similarities = {}
     for obj_id in similarities.keys():

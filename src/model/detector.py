@@ -3,7 +3,7 @@ import logging
 import os
 import os.path as osp
 import time
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple
 
 import numpy as np
 import pytorch_lightning as pl
@@ -61,10 +61,21 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
     aggregated_templates_ids = torch.stack([aggregated_templates_ids[k] for k in sorted_obj_keys], dim=-1)
 
     # assign each proposal to the object with the highest scores
-    idx_selected_proposals, pred_idx_objects, pred_score_distribution, pred_scores = \
-        select_top_matching_proposals(score_per_proposal_and_object, aggregated_templates_ids,
-                                      matching_confidence_thresh, sorted_obj_keys, matching_max_num_instances,
-                                      template_data, use_per_template_confidence)
+    score_per_proposal, proposal_assigned_object_id = torch.max(score_per_proposal_and_object, dim=-1)
+
+    #
+    idx_selected_proposals = filter_proposals(aggregated_templates_ids, proposal_assigned_object_id, score_per_proposal,
+                                              sorted_obj_keys, '', template_data, matching_confidence_thresh)
+    # for bop challenge, we only keep top 100 instances
+    if len(idx_selected_proposals) > matching_max_num_instances:
+        logging.info(f"Selecting top {matching_max_num_instances} instances ...")
+        _, idx = torch.topk(
+            score_per_proposal[idx_selected_proposals], k=matching_max_num_instances
+        )
+        idx_selected_proposals = idx_selected_proposals[idx]
+    pred_idx_objects = proposal_assigned_object_id[idx_selected_proposals]
+    pred_scores = score_per_proposal[idx_selected_proposals]
+    pred_score_distribution = score_per_proposal_and_object[idx_selected_proposals]
 
     filter_similarities_dict(similarities, idx_selected_proposals)
 
@@ -79,38 +90,17 @@ def filter_similarities_dict(similarities, idx_selected_proposals):
         similarities[obj_id] = similarities[obj_id][idx_selected_proposals]
 
 
-def select_top_matching_proposals(score_per_proposal_and_object: torch.Tensor, aggregated_templates_ids,
-                                  matching_confidence_thresh: float, sorted_obj_keys: List[int],
-                                  matching_max_num_instances: int, template_data: TemplateBank,
-                                  use_per_template_threshold: bool) -> \
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    score_per_proposal, assigned_idx_object = torch.max(score_per_proposal_and_object, dim=-1)  # N_query
-    idx_selected_proposals = filter_proposals(aggregated_templates_ids, assigned_idx_object, matching_confidence_thresh,
-                                              score_per_proposal, sorted_obj_keys, template_data,
-                                              use_per_template_threshold)
-    # for bop challenge, we only keep top 100 instances
-    if len(idx_selected_proposals) > matching_max_num_instances:
-        logging.info(f"Selecting top {matching_max_num_instances} instances ...")
-        _, idx = torch.topk(
-            score_per_proposal[idx_selected_proposals], k=matching_max_num_instances
-        )
-        idx_selected_proposals = idx_selected_proposals[idx]
-    pred_idx_objects = assigned_idx_object[idx_selected_proposals]
-    pred_scores = score_per_proposal[idx_selected_proposals]
-    pred_score_distribution = score_per_proposal_and_object[idx_selected_proposals]
-    return idx_selected_proposals, pred_idx_objects, pred_score_distribution, pred_scores
+def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_assigned_object_ids: torch.Tensor,
+                     cosine_similarity_per_proposal: torch.Tensor, sorted_obj_keys: list[int],
+                     ood_detection_method: str, template_data: TemplateBank = None,
+                     global_similarity_threshold: float = None) -> torch.Tensor:
+    device = cosine_similarity_per_proposal.device
+    idx_proposals = torch.arange(len(cosine_similarity_per_proposal), device=device)
 
-
-def filter_proposals(proposals_selected_templates_ids, proposals_assigned_object_ids, matching_confidence_thresh: float,
-                     score_per_proposal, sorted_obj_keys: list[int], template_data: TemplateBank,
-                     use_per_template_threshold: bool) -> torch.Tensor:
-    idx_proposals = torch.arange(len(score_per_proposal), device=score_per_proposal.device)
-
-    if use_per_template_threshold:
-        device = proposals_assigned_object_ids.device
+    if ood_detection_method == 'cosine_similarity_quantiles':
         num_proposals = proposals_assigned_object_ids.shape[0]
         assigned_template_id = \
-            proposals_selected_templates_ids[torch.arange(num_proposals, device=device), proposals_assigned_object_ids]
+            proposals_assigned_templates_ids[torch.arange(num_proposals, device=device), proposals_assigned_object_ids]
 
         template_thresholds = template_data.template_thresholds
         thresholds_for_selected_objs = []
@@ -120,9 +110,19 @@ def filter_proposals(proposals_selected_templates_ids, proposals_assigned_object
 
         thresholds_for_selected_objs = torch.stack(thresholds_for_selected_objs)
 
-        idx_selected_proposals = idx_proposals[score_per_proposal > thresholds_for_selected_objs]
+        idx_selected_proposals = idx_proposals[cosine_similarity_per_proposal > thresholds_for_selected_objs]
+    elif ood_detection_method == 'global_threshold':
+        assert global_similarity_threshold is not None
+        idx_selected_proposals = idx_proposals[cosine_similarity_per_proposal > global_similarity_threshold]
+    elif ood_detection_method == 'lowe_test':
+        raise NotImplementedError()
+    elif ood_detection_method == 'mahalanobis_ood_detection':
+        raise NotImplementedError()
+    elif ood_detection_method == 'none':
+        idx_selected_proposals = idx_proposals  # Keep them as they are
     else:
-        idx_selected_proposals = idx_proposals[score_per_proposal > matching_confidence_thresh]
+        raise ValueError(f'Unknown OOD detection method {ood_detection_method}')
+
     return idx_selected_proposals
 
 

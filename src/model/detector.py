@@ -19,7 +19,7 @@ from src.utils.inout import save_json_bop23
 
 def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cls_descriptors: torch.Tensor,
                                         similarity_function: PairwiseSimilarity, aggregation_function: str,
-                                        matching_confidence_thresh: float, matching_max_num_instances: int,
+                                        global_similarity_threshold: float, matching_max_num_instances: int,
                                         use_per_template_confidence: bool = True, use_mahalanobis_dist: bool = False) \
         -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict[int, torch.Tensor]]:
 
@@ -37,7 +37,7 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
         similarities[obj_id] = similarity
 
     aggregated_similarities = {}
-    aggregated_templates_ids = {}
+    proposals_assigned_templates_ids = {}
     for obj_id in similarities.keys():
         if aggregation_function == "mean":
             # N_proposals x N_objects
@@ -55,34 +55,35 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
             raise ValueError("Unknown aggregation function")
 
         aggregated_similarities[obj_id] = score_per_proposal
-        aggregated_templates_ids[obj_id] = proposal_indices
+        proposals_assigned_templates_ids[obj_id] = proposal_indices
 
     score_per_proposal_and_object = torch.stack([aggregated_similarities[k] for k in sorted_obj_keys], dim=-1)
-    aggregated_templates_ids = torch.stack([aggregated_templates_ids[k] for k in sorted_obj_keys], dim=-1)
+    proposals_assigned_templates_ids = torch.stack([proposals_assigned_templates_ids[k] for k in sorted_obj_keys], dim=-1)
 
     # assign each proposal to the object with the highest scores
-    score_per_proposal, proposal_assigned_object_id = torch.max(score_per_proposal_and_object, dim=-1)
+    score_per_proposal, proposals_assigned_object_ids = torch.max(score_per_proposal_and_object, dim=-1)
 
     #
-    idx_selected_proposals = filter_proposals(aggregated_templates_ids, proposal_assigned_object_id, score_per_proposal,
-                                              sorted_obj_keys, '', template_data, matching_confidence_thresh)
+    selected_proposals_indices = filter_proposals(proposals_assigned_templates_ids, proposals_assigned_object_ids,
+                                                  score_per_proposal, sorted_obj_keys, '',
+                                                  template_data, global_similarity_threshold)
     # for bop challenge, we only keep top 100 instances
-    if len(idx_selected_proposals) > matching_max_num_instances:
+    if len(selected_proposals_indices) > matching_max_num_instances:
         logging.info(f"Selecting top {matching_max_num_instances} instances ...")
         _, idx = torch.topk(
-            score_per_proposal[idx_selected_proposals], k=matching_max_num_instances
+            score_per_proposal[selected_proposals_indices], k=matching_max_num_instances
         )
-        idx_selected_proposals = idx_selected_proposals[idx]
-    pred_idx_objects = proposal_assigned_object_id[idx_selected_proposals]
-    pred_scores = score_per_proposal[idx_selected_proposals]
-    pred_score_distribution = score_per_proposal_and_object[idx_selected_proposals]
+        selected_proposals_indices = selected_proposals_indices[idx]
+    pred_idx_objects = proposals_assigned_object_ids[selected_proposals_indices]
+    pred_scores = score_per_proposal[selected_proposals_indices]
+    pred_score_distribution = score_per_proposal_and_object[selected_proposals_indices]
 
-    filter_similarities_dict(similarities, idx_selected_proposals)
+    filter_similarities_dict(similarities, selected_proposals_indices)
 
     sorted_db_keys_tensor = torch.tensor(sorted_obj_keys).to(pred_idx_objects.device)
     selected_objects = sorted_db_keys_tensor[pred_idx_objects]
 
-    return idx_selected_proposals, selected_objects, pred_scores, pred_score_distribution, similarities
+    return selected_proposals_indices, selected_objects, pred_scores, pred_score_distribution, similarities
 
 
 def filter_similarities_dict(similarities, idx_selected_proposals):

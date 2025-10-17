@@ -85,24 +85,9 @@ def select_top_matching_proposals(score_per_proposal_and_object: torch.Tensor, a
                                   use_per_template_threshold: bool) -> \
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     score_per_proposal, assigned_idx_object = torch.max(score_per_proposal_and_object, dim=-1)  # N_query
-    idx_proposals = torch.arange(len(score_per_proposal), device=score_per_proposal.device)
-
-    if use_per_template_threshold:
-        device = assigned_idx_object.device
-        assigned_template_id = \
-            aggregated_templates_ids[torch.arange(assigned_idx_object.shape[0], device=device), assigned_idx_object]
-
-        template_thresholds = template_data.template_thresholds
-        thresholds_for_selected_objs = []
-        for det_id, obj_id in enumerate(assigned_idx_object):
-            threshold = template_thresholds[sorted_obj_keys[obj_id]][assigned_template_id[det_id]]
-            thresholds_for_selected_objs.append(threshold)
-
-        thresholds_for_selected_objs = torch.stack(thresholds_for_selected_objs)
-
-        idx_selected_proposals = idx_proposals[score_per_proposal > thresholds_for_selected_objs]
-    else:
-        idx_selected_proposals = idx_proposals[score_per_proposal > matching_confidence_thresh]
+    idx_selected_proposals = filter_proposals(aggregated_templates_ids, assigned_idx_object, matching_confidence_thresh,
+                                              score_per_proposal, sorted_obj_keys, template_data,
+                                              use_per_template_threshold)
     # for bop challenge, we only keep top 100 instances
     if len(idx_selected_proposals) > matching_max_num_instances:
         logging.info(f"Selecting top {matching_max_num_instances} instances ...")
@@ -114,6 +99,31 @@ def select_top_matching_proposals(score_per_proposal_and_object: torch.Tensor, a
     pred_scores = score_per_proposal[idx_selected_proposals]
     pred_score_distribution = score_per_proposal_and_object[idx_selected_proposals]
     return idx_selected_proposals, pred_idx_objects, pred_score_distribution, pred_scores
+
+
+def filter_proposals(proposals_selected_templates_ids, proposals_assigned_object_ids, matching_confidence_thresh: float,
+                     score_per_proposal, sorted_obj_keys: list[int], template_data: TemplateBank,
+                     use_per_template_threshold: bool) -> torch.Tensor:
+    idx_proposals = torch.arange(len(score_per_proposal), device=score_per_proposal.device)
+
+    if use_per_template_threshold:
+        device = proposals_assigned_object_ids.device
+        num_proposals = proposals_assigned_object_ids.shape[0]
+        assigned_template_id = \
+            proposals_selected_templates_ids[torch.arange(num_proposals, device=device), proposals_assigned_object_ids]
+
+        template_thresholds = template_data.template_thresholds
+        thresholds_for_selected_objs = []
+        for det_id, obj_id in enumerate(proposals_assigned_object_ids):
+            threshold = template_thresholds[sorted_obj_keys[obj_id]][assigned_template_id[det_id]]
+            thresholds_for_selected_objs.append(threshold)
+
+        thresholds_for_selected_objs = torch.stack(thresholds_for_selected_objs)
+
+        idx_selected_proposals = idx_proposals[score_per_proposal > thresholds_for_selected_objs]
+    else:
+        idx_selected_proposals = idx_proposals[score_per_proposal > matching_confidence_thresh]
+    return idx_selected_proposals
 
 
 class CNOS(pl.LightningModule):

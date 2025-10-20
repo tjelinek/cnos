@@ -12,7 +12,7 @@ import torchvision.transforms as T
 from tqdm import tqdm
 
 from condensate_templates import TemplateBank
-from src.model.loss import PairwiseSimilarity, compute_csls_terms
+from src.model.loss import compute_csls_terms, csls_score, cosine_similarity
 from src.model.utils import BatchedData, Detections, convert_npz_to_json
 from src.utils.inout import save_json_bop23
 
@@ -26,30 +26,34 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
     db_descriptors = template_data.cls_desc
     sorted_obj_keys = sorted(db_descriptors.keys())
 
-    similarities = {}
+    cosine_similarities = {}
+    csls_scores = {}
 
     rx, rt, splits = compute_csls_terms(proposal_cls_descriptors, db_descriptors)
     for i, obj_id in enumerate(sorted_obj_keys):
         obj_descriptor = db_descriptors[obj_id]
 
+        similarity = cosine_similarity(proposal_cls_descriptors, obj_descriptor)
+        cosine_similarities[obj_id] = similarity
+
         rt_obj_id = rt[splits[i]:splits[i+1]]
-        similarity = similarity_function(proposal_cls_descriptors, obj_descriptor, rx, rt_obj_id)
-        similarities[obj_id] = similarity
+        csls = csls_score(proposal_cls_descriptors, obj_descriptor, rx, rt_obj_id)
+        csls_scores[obj_id] = csls
 
     aggregated_similarities = {}
     proposals_assigned_templates_ids = {}
-    for obj_id in similarities.keys():
+    for obj_id in cosine_similarities.keys():
         if aggregation_function == "mean":
             # N_proposals x N_objects
-            score_per_proposal = (torch.sum(similarities[obj_id], dim=-1) / similarities[obj_id].shape[-1])
-            proposal_indices = torch.arange(similarities[obj_id].shape[1], device=similarities[obj_id].device)
+            score_per_proposal = (torch.sum(cosine_similarities[obj_id], dim=-1) / cosine_similarities[obj_id].shape[-1])
+            proposal_indices = torch.arange(cosine_similarities[obj_id].shape[1], device=cosine_similarities[obj_id].device)
         elif aggregation_function == "median":
-            score_per_proposal, proposal_indices = torch.median(similarities[obj_id], dim=-1)
+            score_per_proposal, proposal_indices = torch.median(cosine_similarities[obj_id], dim=-1)
         elif aggregation_function == "max":
-            score_per_proposal, proposal_indices = torch.max(similarities[obj_id], dim=-1)
+            score_per_proposal, proposal_indices = torch.max(cosine_similarities[obj_id], dim=-1)
         elif aggregation_function == "avg_5":
-            k = min(similarities[obj_id].shape[-1], 5)
-            score_per_proposal, proposal_indices = torch.topk(similarities[obj_id], k=k, dim=-1)
+            k = min(cosine_similarities[obj_id].shape[-1], 5)
+            score_per_proposal, proposal_indices = torch.topk(cosine_similarities[obj_id], k=k, dim=-1)
             score_per_proposal = torch.mean(score_per_proposal, dim=-1)
         else:
             raise ValueError("Unknown aggregation function")
@@ -57,11 +61,11 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
         aggregated_similarities[obj_id] = score_per_proposal
         proposals_assigned_templates_ids[obj_id] = proposal_indices
 
-    score_per_proposal_and_object = torch.stack([aggregated_similarities[k] for k in sorted_obj_keys], dim=-1)
+    cosine_sim_per_proposal_and_object = torch.stack([aggregated_similarities[k] for k in sorted_obj_keys], dim=-1)
     proposals_assigned_templates_ids = torch.stack([proposals_assigned_templates_ids[k] for k in sorted_obj_keys], dim=-1)
 
     # assign each proposal to the object with the highest scores
-    score_per_proposal, proposals_assigned_object_ids = torch.max(score_per_proposal_and_object, dim=-1)
+    score_per_proposal, proposals_assigned_object_ids = torch.max(cosine_sim_per_proposal_and_object, dim=-1)
 
     #
     selected_proposals_indices = filter_proposals(proposals_assigned_templates_ids, proposals_assigned_object_ids,
@@ -76,14 +80,14 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
         selected_proposals_indices = selected_proposals_indices[idx]
     pred_idx_objects = proposals_assigned_object_ids[selected_proposals_indices]
     pred_scores = score_per_proposal[selected_proposals_indices]
-    pred_score_distribution = score_per_proposal_and_object[selected_proposals_indices]
+    pred_score_distribution = cosine_sim_per_proposal_and_object[selected_proposals_indices]
 
-    filter_similarities_dict(similarities, selected_proposals_indices)
+    filter_similarities_dict(cosine_similarities, selected_proposals_indices)
 
     sorted_db_keys_tensor = torch.tensor(sorted_obj_keys).to(pred_idx_objects.device)
     selected_objects = sorted_db_keys_tensor[pred_idx_objects]
 
-    return selected_proposals_indices, selected_objects, pred_scores, pred_score_distribution, similarities
+    return selected_proposals_indices, selected_objects, pred_scores, pred_score_distribution, cosine_similarities
 
 
 def filter_similarities_dict(similarities, idx_selected_proposals):

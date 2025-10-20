@@ -36,33 +36,51 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
         similarity = cosine_similarity(proposal_cls_descriptors, obj_descriptor)
         cosine_similarities[obj_id] = similarity
 
-        rt_obj_id = rt[splits[i]:splits[i+1]]
+        rt_obj_id = rt[splits[i]:splits[i + 1]]
         csls = csls_score(proposal_cls_descriptors, obj_descriptor, rx, rt_obj_id)
         csls_scores[obj_id] = csls
 
-    aggregated_similarities = {}
-    proposals_assigned_templates_ids = {}
-    for obj_id in cosine_similarities.keys():
+    aggregated_cosine = {}
+    aggregated_csls = {}
+    proposals_assigned_templates_ids_cosine = {}
+    proposals_assigned_templates_ids_csls = {}
+
+    for obj_id in sorted_obj_keys:
         if aggregation_function == "mean":
-            # N_proposals x N_objects
-            score_per_proposal = (torch.sum(cosine_similarities[obj_id], dim=-1) / cosine_similarities[obj_id].shape[-1])
-            proposal_indices = torch.arange(cosine_similarities[obj_id].shape[1], device=cosine_similarities[obj_id].device)
+            cosine_score = torch.sum(cosine_similarities[obj_id], dim=-1) / cosine_similarities[obj_id].shape[-1]
+            csls_score_agg = torch.sum(csls_scores[obj_id], dim=-1) / csls_scores[obj_id].shape[-1]
+            cosine_indices = torch.arange(cosine_similarities[obj_id].shape[1],
+                                          device=cosine_similarities[obj_id].device)
+            csls_indices = torch.arange(csls_scores[obj_id].shape[1], device=csls_scores[obj_id].device)
         elif aggregation_function == "median":
-            score_per_proposal, proposal_indices = torch.median(cosine_similarities[obj_id], dim=-1)
+            cosine_score, cosine_indices = torch.median(cosine_similarities[obj_id], dim=-1)
+            csls_score_agg, csls_indices = torch.median(csls_scores[obj_id], dim=-1)
         elif aggregation_function == "max":
-            score_per_proposal, proposal_indices = torch.max(cosine_similarities[obj_id], dim=-1)
+            cosine_score, cosine_indices = torch.max(cosine_similarities[obj_id], dim=-1)
+            csls_score_agg, csls_indices = torch.max(csls_scores[obj_id], dim=-1)
         elif aggregation_function == "avg_5":
             k = min(cosine_similarities[obj_id].shape[-1], 5)
-            score_per_proposal, proposal_indices = torch.topk(cosine_similarities[obj_id], k=k, dim=-1)
-            score_per_proposal = torch.mean(score_per_proposal, dim=-1)
+            cosine_score, cosine_indices = torch.topk(cosine_similarities[obj_id], k=k, dim=-1)
+            cosine_score = torch.mean(cosine_score, dim=-1)
+            csls_score_agg, csls_indices = torch.topk(csls_scores[obj_id], k=k, dim=-1)
+            csls_score_agg = torch.mean(csls_score_agg, dim=-1)
         else:
             raise ValueError("Unknown aggregation function")
 
-        aggregated_similarities[obj_id] = score_per_proposal
-        proposals_assigned_templates_ids[obj_id] = proposal_indices
+        aggregated_cosine[obj_id] = cosine_score
+        aggregated_csls[obj_id] = csls_score_agg
+        proposals_assigned_templates_ids_cosine[obj_id] = cosine_indices
+        proposals_assigned_templates_ids_csls[obj_id] = csls_indices
 
-    cosine_sim_per_proposal_and_object = torch.stack([aggregated_similarities[k] for k in sorted_obj_keys], dim=-1)
-    proposals_assigned_templates_ids = torch.stack([proposals_assigned_templates_ids[k] for k in sorted_obj_keys], dim=-1)
+    cosine_per_proposal_and_object = torch.stack([aggregated_cosine[k] for k in sorted_obj_keys], dim=-1)
+    csls_per_proposal_and_object = torch.stack([aggregated_csls[k] for k in sorted_obj_keys], dim=-1)
+    proposals_assigned_templates_ids_cosine = torch.stack(
+        [proposals_assigned_templates_ids_cosine[k] for k in sorted_obj_keys], dim=-1)
+    proposals_assigned_templates_ids_csls = torch.stack(
+        [proposals_assigned_templates_ids_csls[k] for k in sorted_obj_keys], dim=-1)
+
+    cosine_score_per_proposal, cosine_proposals_assigned_object_ids = torch.max(cosine_per_proposal_and_object, dim=-1)
+    csls_score_per_proposal, csls_proposals_assigned_object_ids = torch.max(csls_per_proposal_and_object, dim=-1)
 
     # assign each proposal to the object with the highest scores
     breakpoint()

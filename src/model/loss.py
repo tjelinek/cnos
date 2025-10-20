@@ -1,5 +1,3 @@
-from typing import Optional
-
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -42,6 +40,26 @@ def compute_csls_terms(proposal_descriptors, template_descriptors, k=10):
     rt = torch.topk(T, k=kt, dim=1).values.mean(dim=1)  # [Nt]
 
     return rx, rt, splits
+
+
+def cosine_similarity(query: torch.Tensor, reference: torch.Tensor) -> torch.Tensor:
+
+    query_norm = F.normalize(query, dim=1)
+    reference_norm = F.normalize(reference, dim=1)
+    S = query_norm @ reference_norm.T
+
+    return S.clamp(min=-1.0, max=1.0)
+
+
+def csls_score(query: torch.Tensor, reference: torch.Tensor, rx: torch.Tensor, rt: torch.Tensor) -> torch.Tensor:
+
+    query_norm = F.normalize(query, dim=1)
+    reference_norm = F.normalize(reference, dim=1)
+    S = cosine_similarity(query_norm, reference_norm)
+
+    S_csls = 2 * S - rx[:, None] - rt[None, :]
+
+    return S_csls
 
 
 class PairwiseSimilarity(nn.Module):

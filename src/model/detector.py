@@ -18,7 +18,7 @@ from src.utils.inout import save_json_bop23
 
 
 def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cls_descriptors: torch.Tensor,
-                                        similarity_function: PairwiseSimilarity, aggregation_function: str,
+                                        similarity_metric: str, aggregation_function: str,
                                         matching_max_num_instances: int, global_similarity_threshold: float,
                                         lowe_ratio_threshold: float, ood_detection_method: Optional[str] = None) \
         -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict[int, torch.Tensor]]:
@@ -65,6 +65,7 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
     proposals_assigned_templates_ids = torch.stack([proposals_assigned_templates_ids[k] for k in sorted_obj_keys], dim=-1)
 
     # assign each proposal to the object with the highest scores
+    breakpoint()
     score_per_proposal, proposals_assigned_object_ids = torch.max(cosine_sim_per_proposal_and_object, dim=-1)
 
     #

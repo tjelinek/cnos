@@ -21,6 +21,10 @@ matching_config:
   aggregation_function: max
   confidence_thresh: 0.15
   max_num_instances: 100 # max number of instances to consider, 100 is used in BOP toolkit
+  ood_detection_method: None
+  cosine_similarity_quantile: 0.5
+  mahalanobis_quantile: 0.95
+  lowe_ratio_threshold: 1.25
 
 onboarding_config:
   rendering_type: pbr # or pyrender (or onboarding_static or onboarding_dynamic for model-free)

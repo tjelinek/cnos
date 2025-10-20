@@ -3,7 +3,7 @@ import logging
 import os
 import os.path as osp
 import time
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 
 import numpy as np
 import pytorch_lightning as pl
@@ -19,8 +19,8 @@ from src.utils.inout import save_json_bop23
 
 def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cls_descriptors: torch.Tensor,
                                         similarity_function: PairwiseSimilarity, aggregation_function: str,
-                                        global_similarity_threshold: float, matching_max_num_instances: int,
-                                        use_per_template_confidence: bool = True, use_mahalanobis_dist: bool = False) \
+                                        matching_max_num_instances: int, global_similarity_threshold: float,
+                                        lowe_ratio_threshold: float, ood_detection_method: Optional[str] = None) \
         -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict[int, torch.Tensor]]:
 
     db_descriptors = template_data.cls_desc
@@ -65,8 +65,8 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
 
     #
     selected_proposals_indices = filter_proposals(proposals_assigned_templates_ids, proposals_assigned_object_ids,
-                                                  score_per_proposal, sorted_obj_keys, '',
-                                                  template_data, global_similarity_threshold)
+                                                  score_per_proposal, sorted_obj_keys, ood_detection_method,
+                                                  template_data, global_similarity_threshold, lowe_ratio_threshold)
     # for bop challenge, we only keep top 100 instances
     if len(selected_proposals_indices) > matching_max_num_instances:
         logging.info(f"Selecting top {matching_max_num_instances} instances ...")
@@ -94,7 +94,7 @@ def filter_similarities_dict(similarities, idx_selected_proposals):
 def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_assigned_object_ids: torch.Tensor,
                      cosine_similarity_per_proposal: torch.Tensor, sorted_obj_keys: list[int],
                      ood_detection_method: str, template_data: TemplateBank = None,
-                     global_similarity_threshold: float = None) -> torch.Tensor:
+                     global_similarity_threshold: float = None, lowe_ratio_threshold: float = None) -> torch.Tensor:
     device = cosine_similarity_per_proposal.device
     idx_proposals = torch.arange(len(cosine_similarity_per_proposal), device=device)
 
@@ -119,7 +119,7 @@ def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_a
         raise NotImplementedError()
     elif ood_detection_method == 'mahalanobis_ood_detection':
         raise NotImplementedError()
-    elif ood_detection_method == 'none':
+    elif ood_detection_method is None:
         idx_selected_proposals = idx_proposals  # Keep them as they are
     else:
         raise ValueError(f'Unknown OOD detection method {ood_detection_method}')

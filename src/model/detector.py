@@ -116,9 +116,9 @@ def filter_similarities_dict(similarities, idx_selected_proposals):
 
 def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_assigned_object_ids: torch.Tensor,
                      cosine_similarity_per_proposal: torch.Tensor, sorted_obj_keys: list[Any],
-                     ood_detection_method: str, similarities: Dict[Any, torch.Tensor], db_descriptors,
-                     template_data: TemplateBank = None, global_similarity_threshold: float = None,
-                     lowe_ratio_threshold: float = None) -> torch.Tensor:
+                     ood_detection_method: str, similarities: Dict[Any, torch.Tensor],
+                     db_descriptors: Dict[Any, torch.Tensor], template_data: TemplateBank = None,
+                     global_similarity_threshold: float = None, lowe_ratio_threshold: float = None) -> torch.Tensor:
     device = cosine_similarity_per_proposal.device
     idx_proposals = torch.arange(len(cosine_similarity_per_proposal), device=device)
 

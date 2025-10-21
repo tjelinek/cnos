@@ -83,7 +83,20 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
     cosine_score_per_proposal, cosine_proposals_assigned_object_ids = torch.max(cosine_per_proposal_and_object, dim=-1)
     csls_score_per_proposal, csls_proposals_assigned_object_ids = torch.max(csls_per_proposal_and_object, dim=-1)
 
-    score_per_proposal, proposals_assigned_object_ids = torch.max(cosine_sim_per_proposal_and_object, dim=-1)
+    if similarity_metric == 'cosine':
+        proposals_assigned_object_ids = cosine_proposals_assigned_object_ids
+        proposals_assigned_templates_ids = proposals_assigned_templates_ids_cosine
+        score_per_proposal = cosine_score_per_proposal
+        sim_per_proposal_and_object = cosine_per_proposal_and_object
+        similarities = cosine_similarities
+    elif similarity_metric == 'csls':
+        proposals_assigned_object_ids = csls_proposals_assigned_object_ids
+        proposals_assigned_templates_ids = proposals_assigned_templates_ids_csls
+        score_per_proposal = csls_score_per_proposal
+        sim_per_proposal_and_object = csls_per_proposal_and_object
+        similarities = csls_scores
+    else:
+        raise ValueError(f'Unknown similarity_metric value {similarity_metric}')
 
     selected_proposals_indices = filter_proposals(proposals_assigned_templates_ids, proposals_assigned_object_ids,
                                                   cosine_score_per_proposal, sorted_obj_keys, ood_detection_method,

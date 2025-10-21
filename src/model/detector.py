@@ -3,7 +3,7 @@ import logging
 import os
 import os.path as osp
 import time
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, Any
 
 import numpy as np
 import pytorch_lightning as pl
@@ -115,9 +115,10 @@ def filter_similarities_dict(similarities, idx_selected_proposals):
 
 
 def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_assigned_object_ids: torch.Tensor,
-                     cosine_similarity_per_proposal: torch.Tensor, sorted_obj_keys: list[int],
-                     ood_detection_method: str, template_data: TemplateBank = None,
-                     global_similarity_threshold: float = None, lowe_ratio_threshold: float = None) -> torch.Tensor:
+                     cosine_similarity_per_proposal: torch.Tensor, sorted_obj_keys: list[Any],
+                     ood_detection_method: str, similarities: Dict[Any, torch.Tensor],
+                     template_data: TemplateBank = None, global_similarity_threshold: float = None,
+                     lowe_ratio_threshold: float = None) -> torch.Tensor:
     device = cosine_similarity_per_proposal.device
     idx_proposals = torch.arange(len(cosine_similarity_per_proposal), device=device)
 
@@ -139,6 +140,15 @@ def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_a
         assert global_similarity_threshold is not None
         idx_selected_proposals = idx_proposals[cosine_similarity_per_proposal > global_similarity_threshold]
     elif ood_detection_method == 'lowe_test':
+
+        all_similarities = torch.cat([similarities[obj_name] for obj_name in sorted_obj_keys], dim=1)
+
+        topk_sims, topk_indices = torch.topk(all_similarities, 2, dim=1)
+        s1, s2 = topk_sims[:, 0], topk_sims[:, 1]
+        lowe_ratio = s1 / s2
+
+        idx_selected_proposals = idx_proposals[lowe_ratio > lowe_ratio_threshold]
+
         raise NotImplementedError()
     elif ood_detection_method == 'mahalanobis_ood_detection':
         raise NotImplementedError()

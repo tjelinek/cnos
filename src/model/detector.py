@@ -155,7 +155,30 @@ def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_a
         idx_selected_proposals = idx_proposals[lowe_ratio > lowe_ratio_threshold]
 
     elif ood_detection_method == 'mahalanobis_ood_detection':
-        raise NotImplementedError()
+        assigned_best_descriptor = []
+        mu_cs = []
+        mahalanobis_taus = []
+        for i, obj_id in enumerate(proposals_assigned_object_ids):
+            obj_name = sorted_obj_keys[obj_id.item()]
+            obj_descriptors = db_descriptors[obj_name]
+            template_id = proposals_assigned_templates_ids[i, obj_id]
+            best_descriptor = obj_descriptors[template_id]
+            assigned_best_descriptor.append(best_descriptor)
+
+            mu_c = template_data.class_means[obj_name]
+            mu_cs.append(mu_c)
+            mahalanobis_taus.append(template_data.maha_thresh_per_class[obj_name])
+
+        assigned_best_descriptor = torch.stack(assigned_best_descriptor)
+        mu_cs = torch.stack(mu_cs)
+        mahalanobis_taus = torch.stack(mahalanobis_taus)
+        sigma_inv = template_data.sigma_inv
+
+        diff = assigned_best_descriptor - mu_cs
+        mahalanobis_dist = (diff.unsqueeze(1) @ sigma_inv.unsqueeze(0) @ diff.unsqueeze(2)).squeeze()
+
+        idx_selected_proposals = idx_proposals[mahalanobis_dist > mahalanobis_taus]
+
     elif ood_detection_method == 'none':
         idx_selected_proposals = idx_proposals  # Keep them as they are
     else:

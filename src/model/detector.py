@@ -149,7 +149,6 @@ def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_a
 
         idx_selected_proposals = idx_proposals[lowe_ratio > lowe_ratio_threshold]
 
-        raise NotImplementedError()
     elif ood_detection_method == 'mahalanobis_ood_detection':
         raise NotImplementedError()
     elif ood_detection_method == 'none':

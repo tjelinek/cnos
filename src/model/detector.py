@@ -79,11 +79,10 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
     proposals_assigned_templates_ids_csls = torch.stack(
         [proposals_assigned_templates_ids_csls[k] for k in sorted_obj_keys], dim=-1)
 
+    # assign each proposal to the object with the highest scores
     cosine_score_per_proposal, cosine_proposals_assigned_object_ids = torch.max(cosine_per_proposal_and_object, dim=-1)
     csls_score_per_proposal, csls_proposals_assigned_object_ids = torch.max(csls_per_proposal_and_object, dim=-1)
 
-    # assign each proposal to the object with the highest scores
-    breakpoint()
     score_per_proposal, proposals_assigned_object_ids = torch.max(cosine_sim_per_proposal_and_object, dim=-1)
 
     selected_proposals_indices = filter_proposals(proposals_assigned_templates_ids, proposals_assigned_object_ids,

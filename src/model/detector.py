@@ -86,10 +86,10 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
     breakpoint()
     score_per_proposal, proposals_assigned_object_ids = torch.max(cosine_sim_per_proposal_and_object, dim=-1)
 
-    #
     selected_proposals_indices = filter_proposals(proposals_assigned_templates_ids, proposals_assigned_object_ids,
-                                                  score_per_proposal, sorted_obj_keys, ood_detection_method,
-                                                  template_data, global_similarity_threshold, lowe_ratio_threshold)
+                                                  cosine_score_per_proposal, sorted_obj_keys, ood_detection_method,
+                                                  similarities, db_descriptors, template_data,
+                                                  global_similarity_threshold, lowe_ratio_threshold)
     # for bop challenge, we only keep top 100 instances
     if len(selected_proposals_indices) > matching_max_num_instances:
         logging.info(f"Selecting top {matching_max_num_instances} instances ...")

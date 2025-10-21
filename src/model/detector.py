@@ -116,7 +116,7 @@ def filter_similarities_dict(similarities, idx_selected_proposals):
 
 def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_assigned_object_ids: torch.Tensor,
                      cosine_similarity_per_proposal: torch.Tensor, sorted_obj_keys: list[Any],
-                     ood_detection_method: str, similarities: Dict[Any, torch.Tensor],
+                     ood_detection_method: str, similarities: Dict[Any, torch.Tensor], db_descriptors,
                      template_data: TemplateBank = None, global_similarity_threshold: float = None,
                      lowe_ratio_threshold: float = None) -> torch.Tensor:
     device = cosine_similarity_per_proposal.device
@@ -130,7 +130,12 @@ def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_a
         template_thresholds = template_data.template_thresholds
         thresholds_for_selected_objs = []
         for det_id, obj_id in enumerate(proposals_assigned_object_ids):
-            threshold = template_thresholds[sorted_obj_keys[obj_id]][assigned_template_id[det_id]]
+            if sorted_obj_keys[obj_id] is not None:
+                obj_name = sorted_obj_keys[obj_id]
+                threshold = template_thresholds[obj_name][assigned_template_id[det_id]]
+            else:
+                threshold = global_similarity_threshold
+
             thresholds_for_selected_objs.append(threshold)
 
         thresholds_for_selected_objs = torch.stack(thresholds_for_selected_objs)

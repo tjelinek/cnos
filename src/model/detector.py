@@ -142,7 +142,7 @@ def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_a
         raise NotImplementedError()
     elif ood_detection_method == 'mahalanobis_ood_detection':
         raise NotImplementedError()
-    elif ood_detection_method is None:
+    elif ood_detection_method == 'none':
         idx_selected_proposals = idx_proposals  # Keep them as they are
     else:
         raise ValueError(f'Unknown OOD detection method {ood_detection_method}')

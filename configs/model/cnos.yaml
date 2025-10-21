@@ -19,9 +19,10 @@ matching_config:
     _target_: src.model.loss.PairwiseSimilarity
     metric: cosine
   aggregation_function: max
+  similarity_metric: cosine
   confidence_thresh: 0.15
   max_num_instances: 100 # max number of instances to consider, 100 is used in BOP toolkit
-  ood_detection_method: None
+  ood_detection_method: 'none'
   cosine_similarity_quantile: 0.5
   mahalanobis_quantile: 0.95
   lowe_ratio_threshold: 1.25

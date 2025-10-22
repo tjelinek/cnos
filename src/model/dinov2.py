@@ -170,12 +170,16 @@ class CustomDINOv2(pl.LightningModule):
         return dino_cls_descriptor, dino_dense_descriptor
 
 
-def descriptor_from_hydra(model='dinov3', device='cuda') -> CustomDINOv2:
+def descriptor_from_hydra(model='dinov3', mask_detections=True, device='cuda') -> CustomDINOv2:
     if GlobalHydra.instance().is_initialized():
         GlobalHydra.instance().clear()
     cfg_dir = (Path(__file__).parent.parent.parent / 'configs').resolve()
     with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
-        cnos_cfg = compose(config_name="run_inference", overrides=[f'model/descriptor_model={model}'])
+        overrides = [
+            f'model/descriptor_model={model}',
+            f'model.descriptor_model.apply_image_mask={mask_detections}',
+        ]
+        cnos_cfg = compose(config_name="run_inference", overrides=overrides)
 
     model_cfg = cnos_cfg.model.descriptor_model
 

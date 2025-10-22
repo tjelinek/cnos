@@ -107,6 +107,8 @@ class CustomDINOv2(pl.LightningModule):
         rgbs = rgb.unsqueeze(0).repeat(num_proposals, 1, 1, 1)
         if self.apply_image_mask:
             masked_rgbs = rgbs * masks.unsqueeze(1)
+        else:
+            masked_rgbs = rgbs
         processed_masked_rgbs = self.rgb_proposal_processor(
             masked_rgbs, boxes
         )  # [N, 3, target_size, target_size]

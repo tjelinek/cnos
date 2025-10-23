@@ -111,14 +111,14 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
         selected_proposals_indices = selected_proposals_indices[idx]
     pred_idx_objects = proposals_assigned_object_ids[selected_proposals_indices]
     pred_scores = score_per_proposal[selected_proposals_indices]
-    pred_score_distribution = cosine_sim_per_proposal_and_object[selected_proposals_indices]
+    pred_score_distribution = sim_per_proposal_and_object[selected_proposals_indices]
 
-    filter_similarities_dict(cosine_similarities, selected_proposals_indices)
+    filter_similarities_dict(similarities, selected_proposals_indices)
 
     sorted_db_keys_tensor = torch.tensor(sorted_obj_keys).to(pred_idx_objects.device)
     selected_objects = sorted_db_keys_tensor[pred_idx_objects]
 
-    return selected_proposals_indices, selected_objects, pred_scores, pred_score_distribution, cosine_similarities
+    return selected_proposals_indices, selected_objects, pred_scores, pred_score_distribution, similarities
 
 
 def filter_similarities_dict(similarities, idx_selected_proposals):

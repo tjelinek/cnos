@@ -189,7 +189,7 @@ def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_a
         diff = assigned_best_descriptor - mu_cs
         mahalanobis_dist = (diff.unsqueeze(1) @ sigma_inv.unsqueeze(0) @ diff.unsqueeze(2)).squeeze()
 
-        idx_selected_proposals = idx_proposals[mahalanobis_dist > mahalanobis_taus]
+        idx_selected_proposals = idx_proposals[mahalanobis_dist <= mahalanobis_taus]
 
     elif ood_detection_method == 'none':
         idx_selected_proposals = idx_proposals  # Keep them as they are

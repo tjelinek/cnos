@@ -142,11 +142,11 @@ def filter_proposals(proposals_assigned_templates_ids: torch.Tensor, proposals_a
         template_thresholds = template_data.template_thresholds
         thresholds_for_selected_objs = []
         for det_id, obj_id in enumerate(proposals_assigned_object_ids):
-            if sorted_obj_keys[obj_id] is not None:
-                obj_name = sorted_obj_keys[obj_id]
-                threshold = template_thresholds[obj_name][assigned_template_id[det_id]]
+            obj_name = sorted_obj_keys[obj_id]
+            if template_thresholds[obj_name] is not None:
+                threshold = assigned_template_id[det_id]
             else:
-                threshold = global_similarity_threshold
+                threshold = torch.tensor(global_similarity_threshold, device=device)
 
             thresholds_for_selected_objs.append(threshold)
 

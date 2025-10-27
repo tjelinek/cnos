@@ -101,8 +101,11 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
 
                 img_id_int = int(img_name)
                 if scene_gt is not None and training_sequences_mode:
-                    image_gt_annotations = scene_gt[str(img_id_int)]
-                    gt_obj_ids = [obj_data['obj_id'] for obj_data in image_gt_annotations]
+                    if 'onboarding' in folder.stem:
+                        gt_obj_ids = [int(sequence.stem.split('_')[1])]
+                    else:
+                        image_gt_annotations = scene_gt[str(img_id_int)]
+                        gt_obj_ids = [obj_data['obj_id'] for obj_data in image_gt_annotations]
                     gt_obj_segmentations = []
                     for i in range(len(gt_obj_ids)):
                         obj_segmentation_path = segmentations_path / f"{img_name}_{i:06d}.png"

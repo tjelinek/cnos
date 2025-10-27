@@ -151,12 +151,6 @@ def main():
     base_path = Path('/mnt/personal/jelint19/data/')
     bop_path = base_path / 'bop'
     folders = {
-        "hot3d-aria": bop_path / 'hot3d' / 'test_aria_scenewise',
-        "hot3d-quest3": bop_path / 'hot3d' / 'test_quest3_scenewise',
-        "hot3d-aria-train": bop_path / 'hot3d' / 'train_aria_scenewise',
-        "hot3d-quest3-train": bop_path / 'hot3d' / 'train_quest3_scenewise',
-        "lmo": bop_path / 'lmo' / 'test',
-        "tless": bop_path / 'tless' / 'test_primesense',
         "tless-train_pbr": bop_path / 'tless' / 'train_pbr',
         "tless-train_primesense": bop_path / 'tless' / 'train_primesense',
         "lmo-train": bop_path / 'lmo' / 'train',
@@ -173,6 +167,12 @@ def main():
         "hot3d-train_pbr": bop_path / 'hot3d' / 'train_pbr',
         "hot3d-object_ref_quest3_dynamic_scenewise": bop_path / 'hot3d' / 'object_ref_quest3_dynamic_scenewise',
         "hot3d-object_ref_quest3_static_scenewise": bop_path / 'hot3d' / 'object_ref_quest3_static_scenewise',
+        "hot3d-aria": bop_path / 'hot3d' / 'test_aria_scenewise',
+        "hot3d-quest3": bop_path / 'hot3d' / 'test_quest3_scenewise',
+        "hot3d-aria-train": bop_path / 'hot3d' / 'train_aria_scenewise',
+        "hot3d-quest3-train": bop_path / 'hot3d' / 'train_quest3_scenewise',
+        "lmo": bop_path / 'lmo' / 'test',
+        "tless": bop_path / 'tless' / 'test_primesense',
         # "tudl": bop_path / 'tudl' / 'test',
         "icbin": bop_path / 'icbin' / 'test',
         # "itodd": bop_path / 'itodd' / 'test',

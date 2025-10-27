@@ -41,10 +41,24 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
     random.shuffle(all_sequences)
     for sequence in tqdm(all_sequences, desc=f"{detector_model_name}: [{folder}] Sequences", total=len(all_sequences)):
         source_channels = ['rgb']
+        scene_gt_path = sequence / 'scene_gt.json'
+        segmentations_path = sequence / 'mask_visib'
+
         if 'quest3' in split:
-            source_channels = ['gray1', 'gray2']
+            source_channels = ['gray1']
+            scene_gt_path = sequence / 'scene_gt_gray1.json'
+            segmentations_path = sequence / 'mask_visib_gray1'
         elif 'aria' in split:
-            source_channels = ['gray1', 'gray2', 'rgb']
+            source_channels = ['rgb']
+            scene_gt_path = sequence / 'scene_gt_rgb.json'
+            segmentations_path = sequence / 'mask_visib_rgb'
+
+        if scene_gt_path.exists():
+            with open(scene_gt_path, 'r') as scene_gt_f:
+                scene_gt = json.load(scene_gt_f)
+        else:
+            scene_gt = None
+
         for channel in tqdm(source_channels, desc=f'Channel in {dataset}/{split}/{sequence.name}',
                             total=len(source_channels)):
             image_folder = sequence / channel

@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 import pickle
 import shutil
@@ -7,6 +8,8 @@ from pathlib import Path
 from time import time
 
 import torch
+import torchvision
+
 from segment_anything.utils.amg import mask_to_rle_pytorch
 
 sys.path.append(str((Path(__file__).parent).resolve()))
@@ -18,13 +21,13 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-from utils.image_utils import overlay_mask
+from utils.image_utils import overlay_mask, compute_overlap_ratio, compute_target_coverage
 from repositories.cnos.src.model.detector import CNOS
 from repositories.cnos.src.model.dinov2 import descriptor_from_hydra
 
 
 def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, split: str, cfg: DictConfig,
-                           detector_model_name: str):
+                           detector_model_name: str, min_gt_overlap: float = 0.9, min_coverage_of_gt: float = 0.25):
 
     # Silence SAM2 logs
     logging.getLogger().setLevel(logging.WARNING)
@@ -91,6 +94,21 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
                                           disable=True):
                 img_name = img_path.stem
 
+                img_id_int = int(img_name)
+                if scene_gt is not None:
+                    image_gt_annotations = scene_gt[str(img_id_int)]
+                    gt_obj_ids = [obj_data['obj_id'] for obj_data in image_gt_annotations]
+                    gt_obj_segmentations = []
+                    for i in range(len(gt_obj_ids)):
+                        obj_segmentation_path = segmentations_path / f"{img_name}_{i:06d}.png"
+                        segmentation = torchvision.io.read_image(str(obj_segmentation_path)).to('cuda')
+                        gt_obj_segmentations.append(segmentation.to(torch.float32) / 255.)
+
+                    gt_obj_segmentations = torch.cat(gt_obj_segmentations, dim=0)
+                else:
+                    gt_obj_ids = None
+                    gt_obj_segmentations = None
+
                 pickle_path_dinov2 = Path(f"{proposals_dir_dinov2}/{img_name}.pkl")
                 pickle_path_dinov3 = Path(f"{proposals_dir_dinov3}/{img_name}.pkl")
 
@@ -108,6 +126,27 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
                 masks = detections.masks
                 masks_rle = mask_to_rle_pytorch((masks > 0).to(torch.long))
 
+                if gt_obj_ids is not None and gt_obj_segmentations is not None:
+                    overlap = compute_overlap_ratio(masks, gt_obj_segmentations)
+
+                    assigned_indices = overlap.argmax(dim=1)
+                    max_overlap = overlap.max(dim=1).values
+                    assigned_gt = gt_obj_segmentations[assigned_indices]
+
+                    coverage_of_gt = compute_target_coverage(masks, assigned_gt)
+                    valid_indices = torch.where((max_overlap >= min_gt_overlap) &
+                                                (coverage_of_gt >= min_coverage_of_gt))[0]
+
+                    valid_indices_list = valid_indices.tolist()
+                    masks_rle = [masks_rle[i] for i in valid_indices_list]
+                    masks = masks[valid_indices]
+
+                    assigned_indices = assigned_indices[valid_indices]
+                    detections_obj_ids = [gt_obj_ids[gt_index] for gt_index in assigned_indices.tolist()]
+                else:
+                    valid_indices = torch.arange(0, len(masks_rle), dtype=torch.long, device=masks.device)
+                    detections_obj_ids = None
+
                 # Process both DINOv2 and DINOv3 descriptors
                 for descriptor_func, pickle_path in [(descriptor_dinov2, pickle_path_dinov2),
                                                      (descriptor_dinov3, pickle_path_dinov3)]:
@@ -118,10 +157,14 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
                         torch.cuda.synchronize()
                         description_time = time() - start_time
 
+                        detections_cls_descriptors = detections_cls_descriptors[valid_indices]
+                        detections_patch_descriptors = detections_patch_descriptors[valid_indices]
+
                         detection_dict = {
                             "masks": masks_rle,
                             "descriptors": detections_cls_descriptors.numpy(force=True),
-                            # "patch_descriptors": detections_patch_descriptors.numpy(force=True),
+                            "patch_descriptors": detections_patch_descriptors.numpy(force=True),
+                            "detections_object_ids": detections_obj_ids,
                             "detection_time": detections_time,
                             "description_time": description_time,
                         }

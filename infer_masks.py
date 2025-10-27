@@ -27,7 +27,8 @@ from repositories.cnos.src.model.dinov2 import descriptor_from_hydra
 
 
 def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, split: str, cfg: DictConfig,
-                           detector_model_name: str, min_gt_overlap: float = 0.9, min_coverage_of_gt: float = 0.25):
+                           detector_model_name: str, min_gt_overlap: float = 0.9, min_coverage_of_gt: float = 0.25,
+                           training_sequences_mode: bool = False, images_subsample: int = 1):
 
     # Silence SAM2 logs
     logging.getLogger().setLevel(logging.WARNING)
@@ -89,13 +90,17 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
             proposals_dir_dinov3.mkdir(parents=True, exist_ok=True)
 
             all_images = sorted(image_folder.iterdir())
+            rng = random.Random(42)
+            rng.shuffle(all_images)
+            all_images = all_images[::images_subsample]
+
             for img_idx, img_path in tqdm(enumerate(all_images), total=len(all_images),
                                           leave=False, desc=f"Images in {dataset}/{split}/{sequence.name}",
                                           disable=True):
                 img_name = img_path.stem
 
                 img_id_int = int(img_name)
-                if scene_gt is not None:
+                if scene_gt is not None and training_sequences_mode:
                     image_gt_annotations = scene_gt[str(img_id_int)]
                     gt_obj_ids = [obj_data['obj_id'] for obj_data in image_gt_annotations]
                     gt_obj_segmentations = []
@@ -253,7 +258,12 @@ def main():
         split = folder_path.name
         dataset = folder_path.parent.name
 
-        infer_masks_for_folder(folder_path, base_cache_path, dataset, split, cfg, detector)
+        training_sequences_mode = split not in ['test', 'test_primesense', 'test_kinect', 'val']
+        images_subsample = 10 if training_sequences_mode else 1
+
+        infer_masks_for_folder(folder_path, base_cache_path, dataset, split, cfg, detector,
+                               training_sequences_mode=training_sequences_mode,
+                               images_subsample=images_subsample)
 
 
 if __name__ == "__main__":

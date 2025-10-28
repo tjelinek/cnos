@@ -6,6 +6,7 @@ import shutil
 import sys
 from pathlib import Path
 from time import time
+from typing import Any
 
 import torch
 import torchvision
@@ -104,15 +105,15 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
                     if 'onboarding' in folder.stem:
                         gt_obj_ids = [int(sequence.stem.split('_')[1])]
                     else:
-                        image_gt_annotations = scene_gt[str(img_id_int)]
+                        try:
+                            image_gt_annotations = scene_gt[str(img_id_int)]
+                        except KeyError:  # Mainly Aria sequences do not have GT to all the images
+                            continue
                         gt_obj_ids = [obj_data['obj_id'] for obj_data in image_gt_annotations]
-                    gt_obj_segmentations = []
-                    for i in range(len(gt_obj_ids)):
-                        obj_segmentation_path = segmentations_path / f"{img_name}_{i:06d}.png"
-                        segmentation = torchvision.io.read_image(str(obj_segmentation_path)).to('cuda')
-                        gt_obj_segmentations.append(segmentation.to(torch.float32) / 255.)
-
-                    gt_obj_segmentations = torch.cat(gt_obj_segmentations, dim=0)
+                    try:
+                        gt_obj_segmentations = get_gt_segmentations_for_image(img_name, segmentations_path, gt_obj_ids)
+                    except RuntimeError:  # For some images I get RuntimeError: Expected a non-empty file
+                        continue
                 else:
                     gt_obj_ids = None
                     gt_obj_segmentations = None
@@ -190,6 +191,18 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
                         # cv2.imwrite(str(proposals_dir_dinov2 / f"{img_name}_{i:06d}.png"), mask_uint8)
                         cv2.imwrite(str(detections_visual_dir / f"{img_name}_{i:06d}.jpg"),
                                     cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
+
+
+def get_gt_segmentations_for_image(img_name: str, segmentations_path: Path, gt_obj_ids: list[int] | list[Any])\
+        -> torch.Tensor:
+    gt_obj_segmentations = []
+    for i in range(len(gt_obj_ids)):
+        obj_segmentation_path = segmentations_path / f"{img_name}_{i:06d}.png"
+        segmentation = torchvision.io.read_image(str(obj_segmentation_path)).to('cuda')
+        gt_obj_segmentations.append(segmentation.to(torch.float32) / 255.)
+
+    gt_obj_segmentations = torch.cat(gt_obj_segmentations, dim=0)
+    return gt_obj_segmentations
 
 
 def main():

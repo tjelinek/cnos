@@ -26,6 +26,8 @@ matching_config:
   cosine_similarity_quantile: 0.5
   mahalanobis_quantile: 0.95
   lowe_ratio_threshold: 1.25
+  patch_descriptors_filtering: False
+  min_avg_patch_cosine_similarity: 0.
 
 onboarding_config:
   rendering_type: pbr # or pyrender (or onboarding_static or onboarding_dynamic for model-free)

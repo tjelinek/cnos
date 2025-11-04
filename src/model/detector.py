@@ -15,13 +15,24 @@ from condensate_templates import TemplateBank
 from src.model.loss import compute_csls_terms, csls_score, cosine_similarity
 from src.model.utils import BatchedData, Detections, convert_npz_to_json
 from src.utils.inout import save_json_bop23
+from utils.detection_utils import average_patch_similarity
 
 
-def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cls_descriptors: torch.Tensor,
-                                        similarity_metric: str, aggregation_function: str,
-                                        matching_max_num_instances: int, global_similarity_threshold: float,
-                                        lowe_ratio_threshold: float, ood_detection_method: Optional[str] = None) \
-        -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict[int, torch.Tensor]]:
+def compute_templates_similarity_scores(
+    template_data: TemplateBank,
+    proposal_cls_descriptors: torch.Tensor,
+    proposal_patch_descriptors: torch.Tensor,
+    proposal_masks: torch.Tensor,
+    similarity_metric: str,
+    aggregation_function: str,
+    matching_max_num_instances: int,
+    global_similarity_threshold: float,
+    lowe_ratio_threshold: float,
+    ood_detection_method: Optional[str] = None,
+    patch_descriptors_filtering: bool = False,
+    min_avg_patch_cosine_similarity: float = 0.,
+    descriptor_mask_detections: bool = True,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict[int, torch.Tensor]]:
 
     db_descriptors = template_data.cls_desc
     sorted_obj_keys = sorted(db_descriptors.keys())
@@ -102,6 +113,40 @@ def compute_templates_similarity_scores(template_data: TemplateBank, proposal_cl
                                                   cosine_score_per_proposal, sorted_obj_keys, ood_detection_method,
                                                   similarities, db_descriptors, template_data,
                                                   global_similarity_threshold, lowe_ratio_threshold)
+
+    if patch_descriptors_filtering:
+
+        assigned_object_ids = proposals_assigned_object_ids[selected_proposals_indices]
+        selected_object_templates = proposals_assigned_templates_ids[selected_proposals_indices]
+
+        detections_patch_similarities = []
+        for detection_id in range(len(assigned_object_ids)):
+
+            assigned_obj_id = assigned_object_ids[detection_id]
+            assigned_obj_key = sorted_obj_keys[assigned_obj_id]
+            object_descriptors = template_data.patch_desc[assigned_obj_key]
+            assigned_template_id = selected_object_templates[detection_id, assigned_obj_id]
+            patch_descriptor = object_descriptors[assigned_template_id][None]
+
+            assigned_mask = template_data.masks[assigned_obj_key][assigned_template_id][None]
+
+            proposal_patch_descriptor = proposal_patch_descriptors[[detection_id]]
+            proposal_mask = proposal_masks[[detection_id]]
+
+            patch_similarity = average_patch_similarity(
+                proposal_patch_descriptor,
+                patch_descriptor,
+                proposal_mask,
+                assigned_mask,
+                descriptor_mask_detections,
+            )
+
+            detections_patch_similarities.append(patch_similarity.squeeze())
+
+        detections_patch_similarities = torch.stack(detections_patch_similarities)
+        detections_similar_patches_mask = detections_patch_similarities >= min_avg_patch_cosine_similarity
+        selected_proposals_indices = selected_proposals_indices[detections_similar_patches_mask]
+
     # for bop challenge, we only keep top 100 instances
     if len(selected_proposals_indices) > matching_max_num_instances:
         logging.info(f"Selecting top {matching_max_num_instances} instances ...")

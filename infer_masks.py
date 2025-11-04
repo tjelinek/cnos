@@ -226,7 +226,7 @@ def main():
     with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
         cfg = compose(config_name="run_inference", overrides=[f"model/segmentor_model={detector}"])
 
-    base_path = Path('/mnt/personal/jelint19/data/')
+    base_path = Path('/mnt/data/vrg/public_datasets/')
     bop_path = base_path / 'bop'
     folders = {
         "tless-train_pbr": bop_path / 'tless' / 'train_pbr',

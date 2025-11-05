@@ -114,7 +114,7 @@ def compute_templates_similarity_scores(
                                                   similarities, db_descriptors, template_data,
                                                   global_similarity_threshold, lowe_ratio_threshold)
 
-    if patch_descriptors_filtering:
+    if patch_descriptors_filtering and len(selected_proposals_indices) > 0:
 
         assigned_object_ids = proposals_assigned_object_ids[selected_proposals_indices]
         selected_object_templates = proposals_assigned_templates_ids[selected_proposals_indices]

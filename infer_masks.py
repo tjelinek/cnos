@@ -57,6 +57,10 @@ def infer_masks_for_folder(folder: Path, base_cache_folder: Path, dataset: str, 
             source_channels = ['rgb']
             scene_gt_path = sequence / 'scene_gt_rgb.json'
             segmentations_path = sequence / 'mask_visib_rgb'
+        elif 'itodd' in dataset:
+            source_channels = ['gray']
+            scene_gt_path = sequence / 'scene_gt.json'
+            segmentations_path = sequence / 'mask_visib'
 
         if scene_gt_path.exists():
             with open(scene_gt_path, 'r') as scene_gt_f:
